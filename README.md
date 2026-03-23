@@ -1,6 +1,6 @@
 ## BoberInSpire – Slay the Spire 2 Combat Assistant
 
-![Combat Assistant overlay](data/media/overlay_UI.png)
+![Combat Assistant overlay](overlay_UI.png)
 
 BoberInSpire is a **hybrid C# + Python assistant** for Slay the Spire 2.  
 A custom C# mod exports the current combat / merchant state to JSON, and a Python overlay analyzes it and shows real‑time information in a separate, semi‑transparent window.
