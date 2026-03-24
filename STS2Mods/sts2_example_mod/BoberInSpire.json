@@ -3,7 +3,7 @@
   "name": "BoberInSpire",
   "author": "BoberInSpire",
   "description": "Combat and reward overlay data exporter for BoberInSpire.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "has_pck": true,
   "has_dll": true,
   "dependencies": [],

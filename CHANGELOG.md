@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0] – 2026-03-24
+
+### Added
+- **Player install flow in README** – added a non-programmer-friendly installer guide and simplified launch steps for users who only want to play with the overlay/mod.
+- **Upgraded card reward boost** – card reward advisor now applies a flat `+10` score bump to upgraded offers (e.g. `Molten Fist+`) and surfaces it in the recommendation reason.
+- Reddit post package updated in `docs/reddit_post.md` with direct screenshot links for combat overlay and card pick advisor.
+
+### Fixed
+- **Freeze / stall risk during export** – debounced export now defers execution to the Godot main thread instead of reading game state from a timer thread.
+- **Localization formatting errors** – exporter now resolves formatted text with dynamic variables (`DynamicVarSet`) for cards/relics, preventing repeated formatting failures in combat logs.
+- **Mod loading guidance** – docs now reflect current STS2 behavior (`<game>\mods\` + in-game mod toggle), with GUMM treated as optional.
+
 ## [1.1.0] – 2026-03-16
 
 ### Added
