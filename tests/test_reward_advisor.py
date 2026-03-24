@@ -47,6 +47,15 @@ class TestRecommend:
         assert r.best_card == "Perfected Strike"
         assert r.archetype == "strike"
 
+    def test_upgraded_offered_card_gets_flat_score_bonus(self):
+        """Reward rows ending with '+' get +10 on the final blended score (capped at 100)."""
+        deck = ["Strike", "Defend", "Inflame", "Twin Strike"]
+        r = recommend("Ironclad", deck, [], ["Twin Strike", "Twin Strike+"])
+        base = next(x for x in r.recommendations if x.name == "Twin Strike")
+        plus = next(x for x in r.recommendations if x.name == "Twin Strike+")
+        assert plus.score == min(100, base.score + 10)
+        assert "upgraded offer" in plus.reason.lower()
+
     def test_empty_options_returns_empty(self):
         r = recommend("Ironclad", ["Strike"], [], [])
         assert r.best_card == ""

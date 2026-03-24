@@ -49,6 +49,9 @@ TIER_LETTER_SCORE: dict[str, int] = {
 COMBINED_TIER_LIST_WEIGHT = 0.55
 ARCHETYPE_SCORE_WEIGHT = 0.45
 
+# Reward screen sometimes offers already-upgraded cards (name ends with "+"); bump final score.
+OFFERED_UPGRADE_SCORE_BONUS = 10
+
 REWARD_ADVISOR_DEBUG = os.environ.get("BOBER_REWARD_DEBUG", "").strip().lower() in (
     "1",
     "true",
@@ -324,6 +327,12 @@ def _base_card_name(name: str) -> str:
     while s.endswith("+"):
         s = s[:-1].rstrip()
     return s.strip()
+
+
+def _offered_card_is_upgraded(name: str) -> bool:
+    """True if the reward row is an upgraded copy (e.g. Molten Fist+)."""
+    s = name.strip()
+    return bool(s) and s.endswith("+")
 
 
 def _fill_tier_index(
@@ -969,6 +978,13 @@ def recommend(
         score, tier, reason, mob_t, wiki_t = _blend_dual_tier_lists(
             character, card_name, arch_score, arch_reason
         )
+        if _offered_card_is_upgraded(card_name):
+            score = min(100, score + OFFERED_UPGRADE_SCORE_BONUS)
+            tier = _tier_from_archetype_score(score)
+            bump_note = f"upgraded offer (+{OFFERED_UPGRADE_SCORE_BONUS})"
+            reason = _trim_overlay_reason(
+                f"{reason}; {bump_note}" if reason.strip() else bump_note
+            )
         scored.append(
             CardRecommendation(
                 name=card_name,
