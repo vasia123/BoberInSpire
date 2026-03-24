@@ -226,11 +226,22 @@ public static class RewardExportPatches
             if (modelProp?.GetValue(cardObj) is MegaCrit.Sts2.Core.Models.CardModel m)
                 return m.Title ?? m.GetType().Name;
 
+            // Merchant shop: MegaCrit.Sts2.Core.Entities.Merchant.MerchantCardEntry exposes Card via CreationResult.Card
+            var creationProp = t.GetProperty("CreationResult",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (creationProp?.GetValue(cardObj) is { } creation)
+            {
+                var cardFromCr = creation.GetType().GetProperty("Card",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (cardFromCr?.GetValue(creation) is MegaCrit.Sts2.Core.Models.CardModel m2)
+                    return m2.Title ?? m2.GetType().Name;
+            }
+
             var titleProp = t.GetProperty("Title", BindingFlags.Public | BindingFlags.Instance);
             if (titleProp?.GetValue(cardObj) is string s && !string.IsNullOrEmpty(s))
                 return s;
 
-            return cardObj.ToString();
+            return null;
         }
         catch { }
         return null;
@@ -329,7 +340,7 @@ public static class RewardsScreenExportPatches
                         continue;
                     }
                     var name = RewardExportPatches.GetCardName(item);
-                    if (IsPlausibleCardTitle(name))
+                    if (CardTitleHeuristics.IsPlausibleCardTitle(name))
                         acc.Add(name!);
                 }
             }
@@ -341,46 +352,10 @@ public static class RewardsScreenExportPatches
                     continue;
                 }
                 var name = RewardExportPatches.GetCardName(val);
-                if (IsPlausibleCardTitle(name))
+                if (CardTitleHeuristics.IsPlausibleCardTitle(name))
                     acc.Add(name!);
             }
         }
-    }
-
-    private static bool IsPlausibleCardTitle(string? s)
-    {
-        if (string.IsNullOrWhiteSpace(s)) return false;
-        s = s.Trim();
-        if (s.Length is < 2 or > 48) return false;
-        if (LooksLikeNoise(s)) return false;
-        if (s.Equals("True", StringComparison.OrdinalIgnoreCase) || s.Equals("False", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (s.Equals("Gold", StringComparison.OrdinalIgnoreCase) || s.Equals("Potion", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (s.Equals("Card", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (int.TryParse(s, out _) || long.TryParse(s, out _))
-            return false;
-        if (s.Contains('(') && s.Contains(')'))
-            return false;
-        if (s.StartsWith("POTION.", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (s.StartsWith("CHARACTER.", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (s.Contains("MONSTER.", StringComparison.OrdinalIgnoreCase))
-            return false;
-        var letterCount = s.Count(char.IsLetter);
-        if (letterCount < 2)
-            return false;
-        return true;
-    }
-
-    private static bool LooksLikeNoise(string s)
-    {
-        if (s.Length > 80) return true;
-        if (s.Contains("MegaCrit", StringComparison.Ordinal)) return true;
-        if (s.StartsWith("System.", StringComparison.Ordinal)) return true;
-        return false;
     }
 }
 

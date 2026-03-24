@@ -1,10 +1,16 @@
-# Card tier lists (Mobalytics snapshot)
+# Card tier lists
 
-- **Source:** [Slay the Spire 2 Card Tier List – Mobalytics](https://mobalytics.gg/slay-the-spire-2/tier-lists/cards)
-- **File:** `mobalytics_cards.json` — tiers **S** / **A** / **B** / **C** / **D** per character (Ironclad, Silent, Regent, Necrobinder, Defect).
-- **Used by:** `python_app/reward_advisor.py` — overlay **CARD REWARD** shows each card’s **Mobalytics tier** when the name matches (upgrades like `Card+` are normalized to `Card`). Scores blend tier list (~55%) with the existing archetype / build-guide heuristics (~45%).
-- **`data/build_guides/`:** Still used for archetype detection and card priorities; tier JSON adds a global power baseline per card.
+## Mobalytics (`mobalytics_cards.json`)
 
-**Updating:** When Mobalytics changes, edit `mobalytics_cards.json` (or replace the `characters` object). Fetching the page as markdown often gives copy-pasteable tier blocks.
+- **Source:** [Mobalytics STS2 card tiers](https://mobalytics.gg/slay-the-spire-2/tier-lists/cards)
+- Tiers **S** / **A** / **B** / **C** / **D** per character.
 
-Preliminary / Early Access list — see Mobalytics methodology on the site.
+## slaythespire-2.com (`slaythespire2_com_cards.json`)
+
+- **Source:** [STS2 Wiki card tier page](https://slaythespire-2.com/card-tier)
+- **Refresh (recommended):** from repo root, `python scripts/scrape_sts2_wiki_tiers.py` (network) — regenerates the JSON from the live page.
+- **Manual:** you can still edit `slaythespire2_com_cards.json` directly (same `characters` → `S`/`A`/… shape as Mobalytics). Includes **F** where the site uses it.
+
+## Advisor blending
+
+`python_app/reward_advisor.py` averages numeric scores from **each tier source that recognizes the card** (Mobalytics and/or wiki), then blends that average **~55%** with archetype heuristics **~45%**. The overlay shows **M:** / **W:** tier letters next to the combined score when known.

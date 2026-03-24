@@ -1,27 +1,140 @@
 """
-Card reward advisor: scores offered cards based on deck, archetype, and build guides.
-Uses game-exported deck/relics and reward options to recommend the best pick.
+Card reward advisor: scores offered cards from deck, Python archetype tables, tier lists,
+and scraped slaythespire-2.com build guides under ``data/build_guides/<character>/``.
+Overlay copy is intentionally short; set env ``BOBER_REWARD_DEBUG=1`` for verbose
+reason strings and console deck logging.
+
+Mobalytics-style priorities live in ``IRONCLAD_ARCHETYPES`` (etc.), not parsed from
+``guide.md``. Wiki build JSON (``wiki_builds.json``) supplies per-build core / acquisition /
+flex lists; when the deck matches a build strongly enough, offered cards that fit that
+build get an extra archetype-score bonus before tier-list blending.
 """
 from __future__ import annotations
 
 import json
+import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from .card_db import lookup_card
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+BUILD_GUIDES_DIR = DATA_DIR / "build_guides"
 MOBALYTICS_TIERS_PATH = DATA_DIR / "tier_lists" / "mobalytics_cards.json"
+STS2_WIKI_TIERS_PATH = DATA_DIR / "tier_lists" / "slaythespire2_com_cards.json"
 
-# Numeric anchors for Mobalytics S–D (used when blending with archetype score)
-MOBALYTICS_TIER_SCORE: dict[str, int] = {
+# Deck ↔ wiki build affinity (sum of weighted overlaps); below this → no build-specific bonus
+WIKI_BUILD_MIN_AFFINITY = 5.0
+# Extra archetype points before tier blend (capped with overall score in _score_character_card path)
+_WIKI_BONUS_CORE = 14
+_WIKI_BONUS_FLEX = 10
+_WIKI_BONUS_PRIORITY: dict[str, int] = {
+    "must_pick": 26,
+    "high": 16,
+    "medium": 9,
+    "low": 6,
+}
+
+# Numeric anchors S–D shared by Mobalytics + slaythespire-2.com; F only on wiki list.
+TIER_LETTER_SCORE: dict[str, int] = {
     "S": 92,
     "A": 78,
     "B": 64,
     "C": 50,
     "D": 36,
+    "F": 22,
 }
-MOBALYTICS_BLEND_WEIGHT = 0.55  # tier list vs archetype heuristic
+# Average tier-list numeric (Mobalytics + wiki when both exist) vs archetype heuristic
+COMBINED_TIER_LIST_WEIGHT = 0.55
+ARCHETYPE_SCORE_WEIGHT = 0.45
+
+REWARD_ADVISOR_DEBUG = os.environ.get("BOBER_REWARD_DEBUG", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
+# Overlay: keep recommendation blurbs readable but not essay-long (verbose → BOBER_REWARD_DEBUG=1)
+REWARD_OVERLAY_REASON_MAX = 140
+
+
+def _neutral_card_reason(archetype: str, deck_len: int, uniq: int) -> str:
+    """Explain a pick that got no archetype early/mid/high bonuses (tier lists may still apply)."""
+    if REWARD_ADVISOR_DEBUG:
+        if archetype == "generic":
+            return (
+                f"No strong archetype match yet ({deck_len} cards, {uniq} unique names in export); "
+                "tier list dominates — add signature cards/relics from the build guide to tune advice"
+            )
+        return (
+            f"This card is not in the {archetype} early/mid/high priority lists "
+            f"({deck_len} cards, {uniq} unique in export); archetype score stayed at baseline"
+        )
+    if archetype == "generic":
+        return "No build match, score comes from tier lists"
+    return (
+        f"Not on your {archetype} priority lists — tier grades still move the score."
+    )
+
+
+def _is_overlay_neutral_arch_reason(arch_reason: str) -> bool:
+    """True when there is nothing to show beyond tier captions (wiki hints count as non-neutral)."""
+    s = (arch_reason or "").strip()
+    if not s:
+        return True
+    if "slaythespire-2.com" in s.lower():
+        return False
+    for part in s.split(";"):
+        p = part.strip()
+        if not p:
+            continue
+        neutral = (
+            p.startswith("No build match, score comes from tier lists")
+            or p.startswith("Not on your ")
+            or p.startswith("No archetype fit")
+            or p.endswith("· tiers drive score")
+        )
+        if not neutral:
+            return False
+    return True
+
+
+def _trim_overlay_reason(text: str, max_len: int = REWARD_OVERLAY_REASON_MAX) -> str:
+    t = text.strip()
+    if len(t) <= max_len:
+        return t
+    return t[: max_len - 1].rstrip() + "…"
+
+
+def _compact_tier_caption(mob_t: str | None, wiki_t: str | None) -> str:
+    parts: list[str] = []
+    if mob_t:
+        parts.append(f"M:{mob_t}")
+    if wiki_t:
+        parts.append(f"W:{wiki_t}")
+    return " · ".join(parts) if parts else "Tiers"
+
+
+def _maybe_log_reward_debug(
+    character: str,
+    archetype: str,
+    deck: list[str],
+    relics: list[str],
+    options: list[str],
+) -> None:
+    if not REWARD_ADVISOR_DEBUG:
+        return
+    sample = sorted({c for c in deck}, key=str.lower)[:12]
+    print(
+        "[BoberInSpire reward_advisor]",
+        f"character={character!r} archetype={archetype!r}",
+        f"deck_n={len(deck)} unique={len(set(c.lower() for c in deck))}",
+        f"relics_n={len(relics)} options={options!r}",
+        f"deck_sample={sample!r}",
+        flush=True,
+    )
+
 
 # Card names referenced many times (archetype tables + scorers)
 CARD_BODY_SLAM = "Body Slam"
@@ -179,6 +292,8 @@ class CardRecommendation:
     score: int
     tier: str
     reason: str
+    mobalytics_tier: str | None = None
+    wiki_tier: str | None = None
 
 
 @dataclass
@@ -187,6 +302,9 @@ class RewardRecommendation:
     best_card: str
     archetype: str
     warnings: list[str] = field(default_factory=list)
+    # Best-matching slaythespire-2.com scraped build for this deck (affinity ≥ WIKI_BUILD_MIN_AFFINITY)
+    wiki_build_title: str | None = None
+    wiki_build_id: str | None = None
 
 
 def _normalize_name(name: str) -> str:
@@ -208,9 +326,11 @@ def _base_card_name(name: str) -> str:
     return s.strip()
 
 
-def _fill_tier_index(idx: dict[str, str], tier_key: str, names: object) -> None:
+def _fill_tier_index(
+    idx: dict[str, str], tier_key: str, names: object, valid_tiers: frozenset[str]
+) -> None:
     """Add card names from one tier bucket into idx (lowercase -> tier letter)."""
-    if len(tier_key) != 1 or tier_key not in MOBALYTICS_TIER_SCORE:
+    if len(tier_key) != 1 or tier_key not in valid_tiers:
         return
     if not isinstance(names, list):
         return
@@ -219,10 +339,13 @@ def _fill_tier_index(idx: dict[str, str], tier_key: str, names: object) -> None:
             idx[n.strip().lower()] = tier_key
 
 
+_MOB_TIERS = frozenset("SABCD")
+
+
 @lru_cache(maxsize=1)
 def _load_mobalytics_index() -> dict[str, dict[str, str]]:
     """
-    character_name -> lowercase_base_card_name -> tier letter (S/A/B/C/D).
+    character_name -> lowercase card name -> tier letter (S/A/B/C/D).
     """
     if not MOBALYTICS_TIERS_PATH.is_file():
         return {}
@@ -237,9 +360,49 @@ def _load_mobalytics_index() -> dict[str, dict[str, str]]:
             continue
         idx: dict[str, str] = {}
         for tier_key, names in tiers.items():
-            _fill_tier_index(idx, tier_key, names)
+            _fill_tier_index(idx, tier_key, names, _MOB_TIERS)
         out[str(char_name)] = idx
     return out
+
+
+_WIKI_TIERS = frozenset("SABCDF")
+
+
+def _collapse_name_key(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", s.lower())
+
+
+@lru_cache(maxsize=1)
+def _load_sts2_wiki_indexes() -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    """
+    (exact_lower -> tier, collapsed_alnum -> tier) per character for slaythespire-2.com list.
+    """
+    if not STS2_WIKI_TIERS_PATH.is_file():
+        return {}, {}
+    try:
+        raw = json.loads(STS2_WIKI_TIERS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}, {}
+    exact: dict[str, dict[str, str]] = {}
+    collapsed: dict[str, dict[str, str]] = {}
+    chars = (raw.get("characters") or {}) if isinstance(raw, dict) else {}
+    for char_name, tiers in chars.items():
+        if not isinstance(tiers, dict):
+            continue
+        ex: dict[str, str] = {}
+        col: dict[str, str] = {}
+        for tier_key, names in tiers.items():
+            if not isinstance(names, list):
+                continue
+            for n in names:
+                if not isinstance(n, str) or not n.strip():
+                    continue
+                lk = n.strip().lower()
+                ex[lk] = tier_key.upper()
+                col[_collapse_name_key(lk)] = tier_key.upper()
+        exact[str(char_name)] = ex
+        collapsed[str(char_name)] = col
+    return exact, collapsed
 
 
 def _mobalytics_character_key(character: str) -> str | None:
@@ -268,6 +431,152 @@ def mobalytics_tier_for(character: str, card_name: str) -> str | None:
         return None
     base = _base_card_name(card_name).lower()
     return idx.get(base)
+
+
+def wiki_tier_for(character: str, card_name: str) -> str | None:
+    """Tier from slaythespire-2.com snapshot (S/A/B/C/D/F), or None."""
+    ck = _mobalytics_character_key(character)
+    if not ck:
+        return None
+    exact, collapsed = _load_sts2_wiki_indexes()
+    ex = exact.get(ck) or {}
+    col = collapsed.get(ck) or {}
+    base = _base_card_name(card_name).strip().lower()
+    if base in ex:
+        return ex[base]
+    ck2 = _collapse_name_key(base)
+    return col.get(ck2)
+
+
+@lru_cache(maxsize=1)
+def _load_wiki_build_catalog() -> dict[str, list[dict]]:
+    """
+    Mobalytics character key (e.g. Ironclad) -> list of build dicts from wiki_builds.json
+    in each ``build_guides/<folder>/`` directory.
+    """
+    out: dict[str, list[dict]] = {}
+    if not BUILD_GUIDES_DIR.is_dir():
+        return out
+    for sub in sorted(BUILD_GUIDES_DIR.iterdir()):
+        if not sub.is_dir():
+            continue
+        path = sub / "wiki_builds.json"
+        if not path.is_file():
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        char = raw.get("character")
+        builds = raw.get("builds")
+        if not isinstance(char, str) or not isinstance(builds, list):
+            continue
+        out[char] = [b for b in builds if isinstance(b, dict)]
+    return out
+
+
+def _guide_card_matches(player_card: str, guide_name: str) -> bool:
+    """True if an exported/offered card name matches a wiki guide card name."""
+    a = _base_card_name(player_card).strip().lower()
+    g = (guide_name or "").strip().lower()
+    if not a or not g:
+        return False
+    if a == g:
+        return True
+    if _collapse_name_key(a) == _collapse_name_key(g):
+        return True
+    if len(g) >= 8 and g in a:
+        return True
+    if len(a) >= 8 and a in g:
+        return True
+    return False
+
+
+def _deck_matches_guide_name(deck: list[str], guide_name: str) -> bool:
+    return any(_guide_card_matches(c, guide_name) for c in deck)
+
+
+def _wiki_build_deck_affinity(build: dict, deck: list[str]) -> float:
+    """How well the current deck matches one wiki build (higher = stronger)."""
+    score = 0.0
+    counted: set[str] = set()
+    for entry in build.get("core_cards") or []:
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key in counted:
+            continue
+        if _deck_matches_guide_name(deck, name):
+            counted.add(key)
+            score += 5.0
+    for row in build.get("card_acquisition_priority") or []:
+        if not isinstance(row, dict):
+            continue
+        name = (row.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key in counted:
+            continue
+        if not _deck_matches_guide_name(deck, name):
+            continue
+        counted.add(key)
+        p = str(row.get("priority") or "").lower()
+        score += {"must_pick": 4.0, "high": 2.0, "medium": 1.0, "low": 0.5}.get(p, 1.0)
+    return score
+
+
+def _wiki_best_build_for_deck(character: str, deck: list[str]) -> tuple[dict | None, float]:
+    ck = _mobalytics_character_key(character)
+    if not ck:
+        return None, 0.0
+    builds = _load_wiki_build_catalog().get(ck) or []
+    if not builds:
+        return None, 0.0
+    best: dict | None = None
+    best_aff = 0.0
+    for b in builds:
+        aff = _wiki_build_deck_affinity(b, deck)
+        if aff > best_aff:
+            best_aff = aff
+            best = b
+    if best is None or best_aff < WIKI_BUILD_MIN_AFFINITY:
+        return None, best_aff
+    return best, best_aff
+
+
+def _wiki_offered_card_bonus(build: dict, offered_card: str) -> tuple[int, str]:
+    """Extra archetype points if the reward matches this wiki build's lists."""
+    candidates: list[tuple[int, str]] = []
+    for entry in build.get("core_cards") or []:
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("name") or "").strip()
+        if name and _guide_card_matches(offered_card, name):
+            candidates.append((_WIKI_BONUS_CORE, "core card"))
+    for row in build.get("card_acquisition_priority") or []:
+        if not isinstance(row, dict):
+            continue
+        name = (row.get("name") or "").strip()
+        if not name or not _guide_card_matches(offered_card, name):
+            continue
+        p = str(row.get("priority") or "").lower()
+        pts = _WIKI_BONUS_PRIORITY.get(p, 7)
+        candidates.append((pts, p.replace("_", " ")))
+    for flex in build.get("flex_cards") or []:
+        if not isinstance(flex, dict):
+            continue
+        name = (flex.get("name") or "").strip()
+        if name and _guide_card_matches(offered_card, name):
+            candidates.append((_WIKI_BONUS_FLEX, "flex"))
+    if not candidates:
+        return 0, ""
+    best_pts, best_lbl = max(candidates, key=lambda x: x[0])
+    title = (build.get("title") or build.get("id") or "build").strip()
+    return best_pts, f"slaythespire-2.com «{title}» — {best_lbl}"
 
 
 def _deck_contains(deck: list[str], card_name: str) -> bool:
@@ -461,24 +770,59 @@ def _tier_from_archetype_score(score: int) -> str:
     return "D"
 
 
-def _blend_mobalytics_tier(
-    character: str, card_name: str, arch_score: int, reason: str
-) -> tuple[int, str, str]:
-    """Returns (final_score, display_tier, reason_text)."""
-    mb_tier = mobalytics_tier_for(character, card_name)
-    if mb_tier and mb_tier in MOBALYTICS_TIER_SCORE:
-        mob_num = MOBALYTICS_TIER_SCORE[mb_tier]
+def _tier_list_numeric_average(character: str, card_name: str) -> tuple[float | None, str | None, str | None]:
+    """Average numeric score from Mobalytics and/or STS2wiki tier rows; None if neither hits."""
+    mob_t = mobalytics_tier_for(character, card_name)
+    wiki_t = wiki_tier_for(character, card_name)
+    nums: list[int] = []
+    if mob_t and mob_t in TIER_LETTER_SCORE:
+        nums.append(TIER_LETTER_SCORE[mob_t])
+    if wiki_t and wiki_t in TIER_LETTER_SCORE:
+        nums.append(TIER_LETTER_SCORE[wiki_t])
+    if not nums:
+        return None, mob_t, wiki_t
+    return sum(nums) / len(nums), mob_t, wiki_t
+
+
+def _blend_dual_tier_lists(
+    character: str, card_name: str, arch_score: int, arch_reason: str
+) -> tuple[int, str, str, str | None, str | None]:
+    """
+    Combine Mobalytics + slaythespire-2.com tier numerics (average when both exist),
+    then blend with archetype score. Returns (final_score, display_tier, reason, mob_t, wiki_t).
+    """
+    tier_avg, mob_t, wiki_t = _tier_list_numeric_average(character, card_name)
+    if tier_avg is not None:
         blended = int(
             round(
-                MOBALYTICS_BLEND_WEIGHT * mob_num
-                + (1.0 - MOBALYTICS_BLEND_WEIGHT) * arch_score
+                COMBINED_TIER_LIST_WEIGHT * tier_avg
+                + ARCHETYPE_SCORE_WEIGHT * arch_score
             )
         )
         blended = min(100, max(0, blended))
-        mb_note = f"Mobalytics {mb_tier}-tier"
-        merged = f"{mb_note}; {reason}" if reason else mb_note
-        return blended, mb_tier, merged
-    return arch_score, _tier_from_archetype_score(arch_score), reason
+        disp = _tier_from_archetype_score(blended)
+        cap = _compact_tier_caption(mob_t, wiki_t)
+        if REWARD_ADVISOR_DEBUG:
+            labels: list[str] = []
+            if mob_t:
+                labels.append(f"Mobalytics {mob_t}")
+            if wiki_t:
+                labels.append(f"STS2wiki {wiki_t}")
+            src = " + ".join(labels) if len(labels) > 1 else (labels[0] if labels else "tiers")
+            merged = _trim_overlay_reason(f"{src} (blend) · {arch_reason}")
+        elif _is_overlay_neutral_arch_reason(arch_reason):
+            # Short human subtitle (M/W tags stay on the main row only)
+            merged = _trim_overlay_reason(arch_reason)
+        else:
+            merged = _trim_overlay_reason(f"{cap} — {arch_reason}")
+        return blended, disp, merged, mob_t, wiki_t
+    return (
+        arch_score,
+        _tier_from_archetype_score(arch_score),
+        _trim_overlay_reason(arch_reason) if not REWARD_ADVISOR_DEBUG else arch_reason,
+        mob_t,
+        wiki_t,
+    )
 
 
 def _score_ironclad_card(
@@ -500,13 +844,19 @@ def _score_ironclad_card(
     score = _ironclad_relic_adjustments(card_name, norm, deck, relics, score, reasons)
     score = _ironclad_demon_form_adjustments(archetype, norm, score, reasons)
 
-    reason = "; ".join(reasons) if reasons else "Neutral pick"
+    uniq = len({c.lower() for c in deck})
+    reason = (
+        "; ".join(reasons)
+        if reasons
+        else _neutral_card_reason(archetype, len(deck), uniq)
+    )
     return (min(100, max(0, score)), reason)
 
 
-def _score_generic_card(_card_name: str) -> tuple[int, str]:
+def _score_generic_card(_card_name: str, deck: list[str]) -> tuple[int, str]:
     """Generic scoring when character/archetype not supported."""
-    return (50, "Generic pick")
+    uniq = len({c.lower() for c in deck})
+    return (50, _neutral_card_reason("generic", len(deck), uniq))
 
 
 def _score_character_card(
@@ -528,7 +878,7 @@ def _score_character_card(
         return _score_from_archetypes(card_name, archetype, deck, relics, REGENT_ARCHETYPES)
     if "silent" in cl:
         return _score_from_archetypes(card_name, archetype, deck, relics, SILENT_ARCHETYPES)
-    return _score_generic_card(card_name)
+    return _score_generic_card(card_name, deck)
 
 
 def _score_from_archetypes(
@@ -568,7 +918,12 @@ def _score_from_archetypes(
             score -= 5
             reasons.append(REASON_DECK_BLOAT)
 
-    reason = "; ".join(reasons) if reasons else "Neutral pick"
+    uniq = len({c.lower() for c in deck})
+    reason = (
+        "; ".join(reasons)
+        if reasons
+        else _neutral_card_reason(archetype, len(deck), uniq)
+    )
     return (min(100, max(0, score)), reason)
 
 
@@ -586,19 +941,44 @@ def recommend(
             recommendations=[],
             best_card="",
             archetype="generic",
+            wiki_build_title=None,
+            wiki_build_id=None,
         )
 
     archetype = _detect_archetype(character, deck, relics)
+    wiki_build, _wiki_aff = _wiki_best_build_for_deck(character, deck)
+    wiki_title: str | None = None
+    wiki_id: str | None = None
+    if wiki_build:
+        wiki_title = wiki_build.get("title") or None
+        wiki_id = wiki_build.get("id") or None
+    _maybe_log_reward_debug(character, archetype, deck, relics, options)
 
     scored: list[CardRecommendation] = []
     for card_name in options:
         arch_score, arch_reason = _score_character_card(
             character, card_name, archetype, deck, relics
         )
-        score, tier, reason = _blend_mobalytics_tier(
+        if wiki_build:
+            wb_pts, wb_note = _wiki_offered_card_bonus(wiki_build, card_name)
+            if wb_pts:
+                arch_score = min(100, arch_score + wb_pts)
+                arch_reason = (
+                    f"{arch_reason}; {wb_note}" if arch_reason else wb_note
+                )
+        score, tier, reason, mob_t, wiki_t = _blend_dual_tier_lists(
             character, card_name, arch_score, arch_reason
         )
-        scored.append(CardRecommendation(name=card_name, score=score, tier=tier, reason=reason))
+        scored.append(
+            CardRecommendation(
+                name=card_name,
+                score=score,
+                tier=tier,
+                reason=reason,
+                mobalytics_tier=mob_t,
+                wiki_tier=wiki_t,
+            )
+        )
 
     scored.sort(key=lambda r: r.score, reverse=True)
     best = scored[0].name if scored else ""
@@ -618,4 +998,6 @@ def recommend(
         best_card=best,
         archetype=archetype,
         warnings=warnings,
+        wiki_build_title=wiki_title,
+        wiki_build_id=wiki_id,
     )

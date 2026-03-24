@@ -1,3 +1,4 @@
+using FirstMod;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -81,6 +82,18 @@ public static class CombatExportPatches
         try
         {
             CombatExporter.SetMerchantRelics(__instance.Inventory);
+
+            var cardTitles = MerchantInventoryOffers.ExtractStockedCardTitles(__instance.Inventory);
+            // Expect ~7 cards (5 class + 2 colorless); allow wider band if layout changes.
+            if (cardTitles.Count is >= 4 and <= 12)
+            {
+                RewardExporter.ExportRewardState(cardTitles, "merchant_cards");
+                Log.Info($"[BoberInSpire] Merchant cards exported: {cardTitles.Count} — {string.Join(", ", cardTitles)}");
+            }
+            else if (cardTitles.Count > 0)
+            {
+                Log.Info($"[BoberInSpire] Merchant card export skipped ({cardTitles.Count} titles, expected 4–12): {string.Join(", ", cardTitles)}");
+            }
         }
         catch (Exception ex)
         {
@@ -93,5 +106,7 @@ public static class CombatExportPatches
     public static void AfterMerchantClose()
     {
         CombatExporter.ClearMerchant();
+        try { RewardExporter.ClearRewardState(); }
+        catch (Exception ex) { Log.Error($"[BoberInSpire] Merchant close clear reward: {ex.Message}"); }
     }
 }

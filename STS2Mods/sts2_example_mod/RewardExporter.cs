@@ -28,9 +28,10 @@ public static class RewardExporter
     }
 
     /// <summary>
-    /// Export reward state when the card reward screen is shown.
+    /// Export reward / shop card-pick state for the overlay advisor.
+    /// <paramref name="screenType"/> is <c>card_reward</c> (post-combat) or <c>merchant_cards</c> (shop).
     /// </summary>
-    public static void ExportRewardState(IReadOnlyList<string> rewardOptions)
+    public static void ExportRewardState(IReadOnlyList<string> rewardOptions, string screenType = "card_reward")
     {
         if (rewardOptions == null || rewardOptions.Count == 0) return;
 
@@ -38,7 +39,7 @@ public static class RewardExporter
         {
             var snapshot = new RewardSnapshot
             {
-                type = "card_reward",
+                type = screenType,
                 character = _cachedCharacter,
                 deck = _cachedDeck.ToList(),
                 relics = _cachedRelicNames.ToList(),

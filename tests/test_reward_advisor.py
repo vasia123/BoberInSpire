@@ -6,6 +6,7 @@ from python_app.reward_advisor import (
     _detect_archetype,
     _count_strikes,
     mobalytics_tier_for,
+    wiki_tier_for,
 )
 
 
@@ -55,6 +56,25 @@ class TestRecommend:
         r = recommend("Unknown", ["Strike"], [], ["Strike", "Defend"])
         assert len(r.recommendations) == 2
         assert all(rec.score == 50 for rec in r.recommendations)
+        assert "No build match, score comes from tier lists" in r.recommendations[0].reason
+
+    def test_neutral_ironclad_compact_reason(self):
+        """Neutral picks get a short subtitle, not long debug prose."""
+        deck = ["Corruption", "True Grit"]  # exhaust signals but low count → still exhaust archetype
+        r = recommend("Ironclad", deck, [], ["Whirlwind", "Inflame"])
+        for rec in r.recommendations:
+            assert "Neutral pick" not in rec.reason
+            assert "list avg blended" not in rec.reason.lower()
+            assert "unique names in export" not in rec.reason
+            assert len(rec.reason.strip()) > 10
+
+
+class TestSts2WikiTiers:
+    def test_silent_snakebite_is_f(self):
+        assert wiki_tier_for("Silent", "Snakebite") == "F"
+
+    def test_expect_a_fight_matches_wiki_casing(self):
+        assert wiki_tier_for("Ironclad", "Expect a Fight") == "S"
 
 
 class TestMobalyticsTiers:
@@ -71,6 +91,35 @@ class TestMobalyticsTiers:
         deck = ["Strike", "Defend", "Defend", "Defend"]
         r = recommend("Regent", deck, [], ["Monologue+", "Guiding Star"])
         assert r.best_card == "Guiding Star"
+
+
+class TestWikiBuildGuides:
+    """slaythespire-2.com scraped builds under data/build_guides/<char>/wiki_builds.json."""
+
+    def test_strength_deck_sets_wiki_build_title(self):
+        deck = [
+            "Inflame",
+            "Demon Form",
+            "Offering",
+            "Twin Strike",
+            "Strike",
+            "Defend",
+            "Bash",
+        ]
+        r = recommend("Ironclad", deck, [], ["Clash", "Anger"])
+        assert r.wiki_build_title
+        assert "Strength" in r.wiki_build_title
+
+    def test_heavy_blade_pref_when_wiki_strength_fit(self):
+        deck = ["Inflame", "Demon Form", "Offering", "Twin Strike", "Strike"]
+        r = recommend("Ironclad", deck, [], ["Heavy Blade", "Clash"])
+        assert r.best_card == "Heavy Blade"
+        hb = next(x for x in r.recommendations if x.name == "Heavy Blade")
+        assert "slaythespire-2.com" in hb.reason.lower()
+
+    def test_starter_only_no_wiki_fit(self):
+        r = recommend("Ironclad", ["Strike", "Strike", "Defend", "Defend"], [], ["Inflame", "Bash"])
+        assert r.wiki_build_title is None
 
 
 class TestCountStrikes:

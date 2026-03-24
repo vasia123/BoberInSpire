@@ -57,6 +57,21 @@ MAX_HEIGHT = 1200
 RESIZE_GRIP_SIZE = 14
 WARN_HP_THRESHOLD = 0.3
 
+# Card reward / merchant advisor — higher contrast than main combat cards
+REWARD_BANNER_BG = "#142a55"
+REWARD_SUBHEADER_BG = "#1a3366"
+REWARD_ROW_BG = "#262a3d"
+REWARD_REASON_BG = "#1c2233"
+REWARD_REASON_FG = "#dde6f2"
+REWARD_TIER_S = "#4dff9e"
+REWARD_TIER_A = "#ffcc4d"
+REWARD_TIER_B = "#7ec8ff"
+REWARD_TIER_C = "#f4d080"
+REWARD_TIER_D = "#ff9aab"
+REWARD_TIER_LOW = "#aab8ce"
+REWARD_WIKI_HINT_FG = "#b8f2c0"
+REWARD_WIKI_HINT_BG = "#15221a"
+
 
 GWL_EXSTYLE = -20
 WS_EX_LAYERED = 0x00080000
@@ -144,6 +159,7 @@ class CombatOverlay:
         self.font_header = tkfont.Font(family="Segoe UI", size=10, weight="bold")
         self.font_net = tkfont.Font(family="Segoe UI", size=13, weight="bold")
         self.font_body = tkfont.Font(family="Consolas", size=10)
+        self.font_body_bold = tkfont.Font(family="Consolas", size=10, weight="bold")
         self.font_small = tkfont.Font(family="Consolas", size=9)
         self.font_summary = tkfont.Font(family="Segoe UI", size=9, slant="italic")
         self.font_btn = tkfont.Font(family="Segoe UI", size=9)
@@ -400,7 +416,9 @@ class CombatOverlay:
         """Refresh the overlay with a new GameState."""
         self._last_state = state
         if state.enemies:
-            self._last_reward_data = None
+            rd = self._last_reward_data or {}
+            if rd.get("type") != "merchant_cards":
+                self._last_reward_data = None
         else:
             self._refresh_reward_if_needed()
         self._render_all()
@@ -427,9 +445,13 @@ class CombatOverlay:
             pass
 
     def _should_show_card_reward(self) -> bool:
-        """Only on post-combat card pick: have options, and not in active combat."""
+        """Post-combat pick or merchant shop cards: have options; hide during real combat only."""
         if not self._last_reward_data or not self._last_reward_data.get("options"):
             return False
+        screen_type = self._last_reward_data.get("type", "card_reward")
+        # Map merchant can still carry a stale combat snapshot with enemies; trust exported shop list.
+        if screen_type == "merchant_cards":
+            return True
         if self._last_state and self._last_state.enemies:
             return False
         return True
@@ -449,14 +471,21 @@ class CombatOverlay:
                 self._render_enemies(state)
                 self._render_strategy(state)
             self._render_relics(state)
-            if state.merchant_relics and not show_pick:
+            at_merchant_cards = (
+                show_pick
+                and (self._last_reward_data or {}).get("type") == "merchant_cards"
+            )
+            if state.merchant_relics and (not show_pick or at_merchant_cards):
                 self._render_merchant_relics(state.merchant_relics)
 
         if self._debug:
             self._render_debug()
 
         if show_pick:
-            self.status_label.config(text="Choose a Card  |  Reward advisor")
+            if (self._last_reward_data or {}).get("type") == "merchant_cards":
+                self.status_label.config(text="Merchant cards  |  Reward advisor")
+            else:
+                self.status_label.config(text="Choose a Card  |  Reward advisor")
         elif state:
             self.status_label.config(text=f"Turn {state.turn}  |  Updated")
         else:
@@ -476,15 +505,24 @@ class CombatOverlay:
             except Exception:
                 pass
 
-        opts = (self._last_reward_data or {}).get("options") or []
+        rd = self._last_reward_data or {}
+        opts = rd.get("options") or []
         opts_preview = ", ".join(str(x) for x in opts[:3])
         if len(opts) > 3:
             opts_preview += f", …(+{len(opts)-3})"
+
+        deck = rd.get("deck") or []
+        deck_uniq = len({str(c).lower() for c in deck})
+        deck_preview = ", ".join(str(x) for x in deck[:6])
+        if len(deck) > 6:
+            deck_preview += f", …(+{len(deck)-6})"
 
         lines = [
             f"Reward file: {self._reward_file_path or '(not set)'}",
             f"Exists: {exists}  MTime: {mtime or '-'}  Size: {size or '-'}",
             f"Parsed options: {len(opts)}  [{opts_preview}]",
+            f"Reward deck: {len(deck)} cards, {deck_uniq} unique  [{deck_preview}]",
+            f"Reward character: {rd.get('character', '-')!r}  type: {rd.get('type', '-')!r}",
         ]
 
         panel = tk.Frame(self.info_frame, bg="#0d0d1a")
@@ -711,9 +749,21 @@ class CombatOverlay:
         if not data or not data.get("options"):
             return
 
+        screen_type = data.get("type", "card_reward")
+        banner = (
+            "MERCHANT — CARDS FOR SALE"
+            if screen_type == "merchant_cards"
+            else "CHOOSE A CARD"
+        )
         tk.Label(
-            self.scroll_frame, text="CHOOSE A CARD",
-            font=self.font_header, fg=LETHAL_COLOR, bg="#1a2a4a", anchor="w", padx=8, pady=4,
+            self.scroll_frame,
+            text=banner,
+            font=self.font_header,
+            fg=LETHAL_COLOR,
+            bg=REWARD_BANNER_BG,
+            anchor="w",
+            padx=8,
+            pady=4,
         ).pack(fill="x", pady=(0, 2))
 
         rec = recommend(
@@ -724,38 +774,80 @@ class CombatOverlay:
         )
 
         tk.Label(
-            self.scroll_frame, text="CARD REWARD",
-            font=self.font_header, fg="#fff", bg="#1a2a4a", anchor="w", padx=8, pady=3,
+            self.scroll_frame,
+            text="CARD REWARD",
+            font=self.font_header,
+            fg="#ffffff",
+            bg=REWARD_SUBHEADER_BG,
+            anchor="w",
+            padx=8,
+            pady=3,
         ).pack(fill="x", pady=(4, 1))
+
+        if getattr(rec, "wiki_build_title", None):
+            tk.Label(
+                self.scroll_frame,
+                text=f"  Deck fit (wiki builds): {rec.wiki_build_title}",
+                font=self.font_small,
+                fg=REWARD_WIKI_HINT_FG,
+                bg=REWARD_WIKI_HINT_BG,
+                anchor="w",
+                padx=10,
+                pady=3,
+                wraplength=WINDOW_WIDTH - 24,
+                justify="left",
+            ).pack(fill="x", padx=2)
 
         best = rec.best_card
         for r in rec.recommendations:
             is_best = r.name == best
             tier_color = (
-                SAFE_COLOR
+                REWARD_TIER_S
                 if r.tier == "S"
-                else WARN_COLOR
+                else REWARD_TIER_A
                 if r.tier == "A"
-                else "#a8c4e8"
+                else REWARD_TIER_B
                 if r.tier == "B"
-                else "#c9a86c"
+                else REWARD_TIER_C
                 if r.tier == "C"
-                else "#b08080"
+                else REWARD_TIER_D
                 if r.tier == "D"
-                else "#888"
+                else REWARD_TIER_LOW
             )
             prefix = "  \u2714 BEST  " if is_best else f"  {r.tier}  "
-            line = f"{prefix} {r.name}  ({r.score})"
+            src_tiers: list[str] = []
+            if getattr(r, "mobalytics_tier", None):
+                src_tiers.append(f"M:{r.mobalytics_tier}")
+            if getattr(r, "wiki_tier", None):
+                src_tiers.append(f"W:{r.wiki_tier}")
+            tier_suffix = f"  [{' '.join(src_tiers)}]" if src_tiers else ""
+            line = f"{prefix} {r.name}  (score {r.score}){tier_suffix}"
             tk.Label(
-                self.scroll_frame, text=line, font=self.font_body,
-                fg=tier_color if is_best else "#aaa", bg=CARD_COLOR,
-                anchor="w", padx=10, pady=1,
-            ).pack(fill="x", padx=4, pady=1)
-            tk.Label(
-                self.scroll_frame, text=f"      \u2022 {r.reason}",
-                font=self.font_small, fg="#888", bg=BG_COLOR,
-                anchor="w", padx=10, pady=0, wraplength=WINDOW_WIDTH - 30, justify="left",
-            ).pack(fill="x", padx=4)
+                self.scroll_frame,
+                text=line,
+                font=self.font_body_bold if is_best else self.font_body,
+                fg=tier_color,
+                bg=REWARD_ROW_BG,
+                anchor="w",
+                padx=10,
+                pady=3,
+            ).pack(fill="x", padx=4, pady=(2, 0))
+            detail = (r.reason or "").strip()
+            if detail:
+                tk.Label(
+                    self.scroll_frame,
+                    text=f"      \u2022 {detail}",
+                    font=self.font_small,
+                    fg=REWARD_REASON_FG,
+                    bg=REWARD_REASON_BG,
+                    anchor="w",
+                    padx=12,
+                    pady=4,
+                    wraplength=WINDOW_WIDTH - 36,
+                    justify="left",
+                ).pack(fill="x", padx=6, pady=(0, 6))
+            else:
+                tk.Frame(self.scroll_frame, height=4, bg=BG_COLOR).pack(fill="x")
 
         if rec.warnings:
             for w in rec.warnings:

@@ -30,6 +30,9 @@ public static class CombatExporter
 
     private static List<MerchantRelicSnapshot>? _merchantRelics;
 
+    /// <summary>Player used for map-mode shop JSON when there is no active combat state; refreshed when the shop closes.</summary>
+    private static Player? _playerForLastMerchantMapExport;
+
     public static void SetCombatState(CombatState? cs)
     {
         _combat = cs;
@@ -40,7 +43,10 @@ public static class CombatExporter
         if (inventory == null)
         {
             _merchantRelics = null;
-            RequestExport();
+            if (_combat != null)
+                RequestExport();
+            else if (_playerForLastMerchantMapExport != null)
+                TryExportMerchantMapSnapshot(_playerForLastMerchantMapExport);
             return;
         }
 
@@ -57,7 +63,10 @@ public static class CombatExporter
                 })
                 .ToList();
             Log.Info($"[BoberInSpire] Merchant relics captured: {_merchantRelics.Count}");
-            RequestExport();
+            if (_combat != null)
+                RequestExport();
+            else if (inventory.Player != null)
+                TryExportMerchantMapSnapshot(inventory.Player);
         }
         catch (Exception ex)
         {
@@ -68,6 +77,10 @@ public static class CombatExporter
     public static void ClearMerchant()
     {
         _merchantRelics = null;
+        if (_combat != null)
+            RequestExport();
+        else if (_playerForLastMerchantMapExport != null)
+            TryExportMerchantMapSnapshot(_playerForLastMerchantMapExport);
     }
 
     public static void RequestExport()
@@ -126,27 +139,111 @@ public static class CombatExporter
             if (player == null) return;
 
             var snapshot = BuildSnapshot(_combat, player);
-            var relicNames = snapshot.relics?.Select(r => r.name).ToList() ?? new List<string>();
-            RewardExporter.CacheFromCombat(snapshot.deck, snapshot.character, relicNames);
-
-            var json = JsonSerializer.Serialize(snapshot, JsonOpts);
-
-            if (json == _lastJson) return;
-            _lastJson = json;
-            _lastWriteTicks = System.Environment.TickCount64;
-
-            _outputPath ??= ProjectSettings.GlobalizePath("user://bober_combat_state.json");
-
-            Task.Run(() =>
-            {
-                try { File.WriteAllText(_outputPath, json); }
-                catch { }
-            });
+            WriteCombatSnapshot(snapshot);
         }
         catch (Exception ex)
         {
             Log.Error($"[BoberInSpire] Export failed: {ex.Message}");
         }
+    }
+
+    private static void WriteCombatSnapshot(Snapshot snapshot)
+    {
+        var relicNames = snapshot.relics?.Select(r => r.name).ToList() ?? new List<string>();
+        RewardExporter.CacheFromCombat(snapshot.deck, snapshot.character, relicNames);
+
+        var json = JsonSerializer.Serialize(snapshot, JsonOpts);
+
+        if (json == _lastJson) return;
+        _lastJson = json;
+        _lastWriteTicks = System.Environment.TickCount64;
+
+        _outputPath ??= ProjectSettings.GlobalizePath("user://bober_combat_state.json");
+
+        Task.Run(() =>
+        {
+            try { File.WriteAllText(_outputPath, json); }
+            catch { }
+        });
+    }
+
+    /// <summary>Shop on the map: no active <see cref="CombatState"/>, but overlay still needs player + master deck + merchant relics.</summary>
+    private static void TryExportMerchantMapSnapshot(Player player)
+    {
+        try
+        {
+            _playerForLastMerchantMapExport = player;
+            InvalidateRelicCache();
+            var snapshot = BuildMerchantMapSnapshot(player);
+            WriteCombatSnapshot(snapshot);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[BoberInSpire] Merchant map export failed: {ex.Message}");
+        }
+    }
+
+    private static Snapshot BuildMerchantMapSnapshot(Player player)
+    {
+        var pcs = player.PlayerCombatState;
+        var relicCount = player.Relics.Count;
+
+        _cachedRelics = new List<SnapshotRelic>();
+        foreach (var r in player.Relics)
+        {
+            try { _cachedRelics.Add(BuildRelic(r)); }
+            catch (Exception ex) { Log.Error($"[BoberInSpire] BuildRelic skip: {ex.Message}"); }
+        }
+
+        _cachedRelicCount = relicCount;
+
+        var handCards = new List<SnapshotCard>();
+        var hand = pcs?.Hand?.Cards;
+        if (hand != null)
+        {
+            foreach (var card in hand)
+            {
+                try { handCards.Add(BuildCard(card, null, player)); }
+                catch (Exception ex) { Log.Error($"[BoberInSpire] BuildCard skip {card?.GetType().Name}: {ex.Message}"); }
+            }
+        }
+
+        return new Snapshot
+        {
+            player = BuildPlayer(player),
+            hand = handCards,
+            enemies = new List<SnapshotEnemy>(),
+            relics = _cachedRelics,
+            merchant_relics = _merchantRelics,
+            turn = 0,
+            draw_pile_count = pcs?.DrawPile?.Cards?.Count ?? 0,
+            discard_pile_count = pcs?.DiscardPile?.Cards?.Count ?? 0,
+            deck = BuildMasterDeckNames(player),
+            character = GetCharacterNameInternal(player),
+        };
+    }
+
+    private static List<string> BuildMasterDeckNames(Player player)
+    {
+        var names = new List<string>();
+        try
+        {
+            var cards = player.Deck?.Cards;
+            if (cards == null) return names;
+            foreach (var item in cards)
+            {
+                var model = GetCardModel(item);
+                if (model == null) continue;
+                var title = model.Title ?? model.GetType().Name;
+                if (!string.IsNullOrEmpty(title)) names.Add(title);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[BoberInSpire] BuildMasterDeckNames: {ex.Message}");
+        }
+
+        return names;
     }
 
     private static Snapshot BuildSnapshot(CombatState combat, Player player)
@@ -182,7 +279,7 @@ public static class CombatExporter
             }
         }
 
-        var deck = BuildDeckInternal(pcs, combat, player);
+        var deck = BuildAdvisorDeckList(pcs, combat, player);
         var character = GetCharacterNameInternal(player);
 
         return new Snapshot
@@ -413,12 +510,16 @@ public static class CombatExporter
         };
     }
 
+    /// <summary>
+    /// Cards currently in combat zones (hand, draw, discard, exhaust). Omits draw pile cards not yet in these piles.
+    /// Prefer <see cref="BuildAdvisorDeckList"/> for reward-overlay deck synergy.
+    /// </summary>
     internal static List<string> BuildDeckInternal(PlayerCombatState? pcs, CombatState? combat, Player? player)
     {
         var names = new List<string>();
         if (pcs == null || combat == null || player == null) return names;
 
-        foreach (var pile in new[] { pcs.Hand?.Cards, pcs.DrawPile?.Cards, pcs.DiscardPile?.Cards })
+        foreach (var pile in new[] { pcs.Hand?.Cards, pcs.DrawPile?.Cards, pcs.DiscardPile?.Cards, pcs.ExhaustPile?.Cards })
         {
             if (pile == null) continue;
             foreach (var item in pile)
@@ -436,6 +537,17 @@ public static class CombatExporter
             }
         }
         return names;
+    }
+
+    /// <summary>
+    /// Full run deck for card advisor: <see cref="Player.Deck"/> when populated; otherwise combat piles (including exhaust).
+    /// </summary>
+    internal static List<string> BuildAdvisorDeckList(PlayerCombatState? pcs, CombatState? combat, Player? player)
+    {
+        var master = player != null ? BuildMasterDeckNames(player) : new List<string>();
+        if (master.Count > 0)
+            return master;
+        return BuildDeckInternal(pcs, combat, player);
     }
 
     internal static string GetCharacterNameInternal(Player? player)
