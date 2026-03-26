@@ -1,4 +1,4 @@
-# BoberInSpire — Card Tier Badges for Slay the Spire 2
+# SmartPick — Card Tier Badges for Slay the Spire 2
 
 ![Card tier badges in action](example.png)
 
@@ -30,18 +30,18 @@ Subscribe to the mod on Steam Workshop — it installs automatically.
 1. **Build the mod** (requires [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) and [Godot 4.5 .NET](https://godotengine.org/download)):
 
    ```
-   dotnet build STS2Mods\sts2_example_mod\ExampleMod.csproj
+   dotnet build SmartPick.csproj
    ```
 
-   This copies `BoberInSpire.dll`, `BoberInSpire.pck`, and `BoberInSpire.json` into your game's `mods\` folder.
+   This copies `SmartPick.dll`, `SmartPick.pck`, and `SmartPick.json` into your game's `mods\` folder.
 
-2. **Enable the mod in-game:** Settings > Modding > Enable **BoberInSpire** > Restart.
+2. **Enable the mod in-game:** Settings > Modding > Enable **SmartPick** > Restart.
 
 > If the build fails with "file is being used by another process", close the game first.
 
 ## Configuration
 
-If your game is not in the default Steam location, create `STS2Mods/sts2_example_mod/local.props`:
+If your game is not in the default Steam location, create `local.props`:
 
 ```xml
 <Project>

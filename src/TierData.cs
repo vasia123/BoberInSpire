@@ -29,16 +29,16 @@ public static class TierData
         try
         {
             _mobaIndex = LoadEmbeddedTierList("mobalytics_cards.json");
-            Log.Info($"[BoberInSpire] TierData: loaded Mobalytics ({_mobaIndex.Count} characters)");
+            Log.Info($"[SmartPick] TierData: loaded Mobalytics ({_mobaIndex.Count} characters)");
         }
-        catch (Exception ex) { Log.Error($"[BoberInSpire] TierData mobalytics load: {ex.Message}"); }
+        catch (Exception ex) { Log.Error($"[SmartPick] TierData mobalytics load: {ex.Message}"); }
 
         try
         {
             _wikiIndex = LoadEmbeddedTierList("slaythespire2_com_cards.json");
-            Log.Info($"[BoberInSpire] TierData: loaded Wiki ({_wikiIndex.Count} characters)");
+            Log.Info($"[SmartPick] TierData: loaded Wiki ({_wikiIndex.Count} characters)");
         }
-        catch (Exception ex) { Log.Error($"[BoberInSpire] TierData wiki load: {ex.Message}"); }
+        catch (Exception ex) { Log.Error($"[SmartPick] TierData wiki load: {ex.Message}"); }
     }
 
     public record TierResult(string? MobaTier, string? WikiTier, string BlendedTier, int BlendedScore);

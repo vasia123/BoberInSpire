@@ -7,8 +7,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
-		<ModName>BoberInSpire</ModName>
-		<ModDisplayName>BoberInSpire</ModDisplayName>
+		<ModName>SmartPick</ModName>
+		<ModDisplayName>SmartPick</ModDisplayName>
 		<ModAuthor>vasia123</ModAuthor>
 		<ModVersion>2.0.0</ModVersion>
 

@@ -13,7 +13,7 @@ pack/export_presets.cfg
 pack/images/relics/*.import
 
 # Generated manifests
-BoberInSpire.json
+SmartPick.json
 
 # Local config (user-specific paths)
 local.props

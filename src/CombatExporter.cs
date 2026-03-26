@@ -66,7 +66,7 @@ public static class CombatExporter
                     cost = e.Cost,
                 })
                 .ToList();
-            Log.Info($"[BoberInSpire] Merchant relics captured: {_merchantRelics.Count}");
+            Log.Info($"[SmartPick] Merchant relics captured: {_merchantRelics.Count}");
             if (_combat != null)
                 RequestExport();
             else if (inventory.Player != null)
@@ -74,7 +74,7 @@ public static class CombatExporter
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Merchant relic capture failed: {ex.Message}");
+            Log.Error($"[SmartPick] Merchant relic capture failed: {ex.Message}");
         }
     }
 
@@ -168,7 +168,7 @@ public static class CombatExporter
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Export failed: {ex.Message}");
+            Log.Error($"[SmartPick] Export failed: {ex.Message}");
         }
     }
 
@@ -183,7 +183,7 @@ public static class CombatExporter
         _lastJson = json;
         _lastWriteTicks = System.Environment.TickCount64;
 
-        _outputPath ??= ProjectSettings.GlobalizePath("user://bober_combat_state.json");
+        _outputPath ??= ProjectSettings.GlobalizePath("user://smartpick_combat_state.json");
 
         Task.Run(() =>
         {
@@ -204,7 +204,7 @@ public static class CombatExporter
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Merchant map export failed: {ex.Message}");
+            Log.Error($"[SmartPick] Merchant map export failed: {ex.Message}");
         }
     }
 
@@ -217,7 +217,7 @@ public static class CombatExporter
         foreach (var r in player.Relics)
         {
             try { _cachedRelics.Add(BuildRelic(r)); }
-            catch (Exception ex) { Log.Error($"[BoberInSpire] BuildRelic skip: {ex.Message}"); }
+            catch (Exception ex) { Log.Error($"[SmartPick] BuildRelic skip: {ex.Message}"); }
         }
 
         _cachedRelicCount = relicCount;
@@ -229,7 +229,7 @@ public static class CombatExporter
             foreach (var card in hand)
             {
                 try { handCards.Add(BuildCard(card, null, player)); }
-                catch (Exception ex) { Log.Error($"[BoberInSpire] BuildCard skip {card?.GetType().Name}: {ex.Message}"); }
+                catch (Exception ex) { Log.Error($"[SmartPick] BuildCard skip {card?.GetType().Name}: {ex.Message}"); }
             }
         }
 
@@ -265,7 +265,7 @@ public static class CombatExporter
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] BuildMasterDeckNames: {ex.Message}");
+            Log.Error($"[SmartPick] BuildMasterDeckNames: {ex.Message}");
         }
 
         return names;
@@ -288,7 +288,7 @@ public static class CombatExporter
                 }
                 catch (Exception ex)
                 {
-                    Log.Error($"[BoberInSpire] BuildRelic skip: {ex.Message}");
+                    Log.Error($"[SmartPick] BuildRelic skip: {ex.Message}");
                 }
             }
             _cachedRelicCount = relicCount;
@@ -300,7 +300,7 @@ public static class CombatExporter
             foreach (var card in hand)
             {
                 try { handCards.Add(BuildCard(card, combat, player)); }
-                catch (Exception ex) { Log.Error($"[BoberInSpire] BuildCard skip {card?.GetType().Name}: {ex.Message}"); }
+                catch (Exception ex) { Log.Error($"[SmartPick] BuildCard skip {card?.GetType().Name}: {ex.Message}"); }
             }
         }
 
@@ -364,7 +364,7 @@ public static class CombatExporter
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] GetCardModel: {ex.Message}");
+            Log.Error($"[SmartPick] GetCardModel: {ex.Message}");
         }
         return null;
     }
@@ -398,7 +398,7 @@ public static class CombatExporter
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] GetCurrentEnergyCost(handItem): {ex.Message}");
+            Log.Error($"[SmartPick] GetCurrentEnergyCost(handItem): {ex.Message}");
         }
 
         if (model != null)
@@ -431,7 +431,7 @@ public static class CombatExporter
             }
             catch (Exception ex)
             {
-                Log.Error($"[BoberInSpire] GetCurrentEnergyCost(model): {ex.Message}");
+                Log.Error($"[SmartPick] GetCurrentEnergyCost(model): {ex.Message}");
             }
             return canonical;
         }
@@ -444,7 +444,7 @@ public static class CombatExporter
         var model = GetCardModel(handItem);
         if (model == null)
         {
-            Log.Error("[BoberInSpire] BuildCard: could not get CardModel from hand item");
+            Log.Error("[SmartPick] BuildCard: could not get CardModel from hand item");
             return new SnapshotCard
             {
                 name = "?", damage = 0, block = 0, hits = 1, energy_cost = 0,

@@ -64,7 +64,7 @@ public static class CombatExportPatches
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Energy patch: {ex.Message}");
+            Log.Error($"[SmartPick] Energy patch: {ex.Message}");
         }
     }
 
@@ -88,16 +88,16 @@ public static class CombatExportPatches
             if (cardTitles.Count is >= 4 and <= 12)
             {
                 RewardExporter.ExportRewardState(cardTitles, "merchant_cards");
-                Log.Info($"[BoberInSpire] Merchant cards exported: {cardTitles.Count} — {string.Join(", ", cardTitles)}");
+                Log.Info($"[SmartPick] Merchant cards exported: {cardTitles.Count} — {string.Join(", ", cardTitles)}");
             }
             else if (cardTitles.Count > 0)
             {
-                Log.Info($"[BoberInSpire] Merchant card export skipped ({cardTitles.Count} titles, expected 4–12): {string.Join(", ", cardTitles)}");
+                Log.Info($"[SmartPick] Merchant card export skipped ({cardTitles.Count} titles, expected 4–12): {string.Join(", ", cardTitles)}");
             }
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Merchant open patch: {ex.Message}");
+            Log.Error($"[SmartPick] Merchant open patch: {ex.Message}");
         }
     }
 
@@ -107,6 +107,6 @@ public static class CombatExportPatches
     {
         CombatExporter.ClearMerchant();
         try { RewardExporter.ClearRewardState(); }
-        catch (Exception ex) { Log.Error($"[BoberInSpire] Merchant close clear reward: {ex.Message}"); }
+        catch (Exception ex) { Log.Error($"[SmartPick] Merchant close clear reward: {ex.Message}"); }
     }
 }

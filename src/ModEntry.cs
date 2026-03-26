@@ -9,8 +9,8 @@ public class ModEntry
     public static void Initialize()
     {
         TierData.Initialize();
-        var harmony = new Harmony("boberinspire.patch");
+        var harmony = new Harmony("smartpick.patch");
         harmony.PatchAll();
-        Log.Info("[BoberInSpire] Harmony patches initialized.");
+        Log.Info("[SmartPick] Harmony patches initialized.");
     }
 }

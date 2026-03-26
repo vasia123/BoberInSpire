@@ -48,19 +48,19 @@ public static class RewardExporter
             };
 
             var json = JsonSerializer.Serialize(snapshot, JsonOpts);
-            _rewardOutputPath ??= ProjectSettings.GlobalizePath("user://bober_reward_state.json");
+            _rewardOutputPath ??= ProjectSettings.GlobalizePath("user://smartpick_reward_state.json");
 
             Task.Run(() =>
             {
                 try { File.WriteAllText(_rewardOutputPath, json); }
-                catch (Exception ex) { Log.Error($"[BoberInSpire] Reward export write failed: {ex.Message}"); }
+                catch (Exception ex) { Log.Error($"[SmartPick] Reward export write failed: {ex.Message}"); }
             });
 
-            Log.Info($"[BoberInSpire] Reward state exported: {rewardOptions.Count} options");
+            Log.Info($"[SmartPick] Reward state exported: {rewardOptions.Count} options");
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Reward export failed: {ex.Message}");
+            Log.Error($"[SmartPick] Reward export failed: {ex.Message}");
         }
     }
 
@@ -71,7 +71,7 @@ public static class RewardExporter
     {
         try
         {
-            _rewardOutputPath ??= ProjectSettings.GlobalizePath("user://bober_reward_state.json");
+            _rewardOutputPath ??= ProjectSettings.GlobalizePath("user://smartpick_reward_state.json");
             if (File.Exists(_rewardOutputPath))
             {
                 File.WriteAllText(_rewardOutputPath, "{}");

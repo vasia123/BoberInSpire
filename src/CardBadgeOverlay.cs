@@ -56,11 +56,11 @@ public static class CardBadgeOverlay
             }
 
             if (_badges.Count > 0)
-                Log.Info($"[BoberInSpire] CardBadge: attached {_badges.Count} badges (char={character})");
+                Log.Info($"[SmartPick] CardBadge: attached {_badges.Count} badges (char={character})");
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] AttachBadges: {ex.Message}");
+            Log.Error($"[SmartPick] AttachBadges: {ex.Message}");
         }
     }
 
@@ -75,7 +75,7 @@ public static class CardBadgeOverlay
             Callable.From(() =>
             {
                 try { AttachBadges(screenNode); }
-                catch (Exception ex) { Log.Error($"[BoberInSpire] AttachBadgesDeferred: {ex.Message}"); }
+                catch (Exception ex) { Log.Error($"[SmartPick] AttachBadgesDeferred: {ex.Message}"); }
             }).CallDeferred();
         });
     }
@@ -168,7 +168,7 @@ public static class CardBadgeOverlay
 
             // Root container for positioning
             var badge = new Control();
-            badge.Name = "BoberTierBadge";
+            badge.Name = "SmartPickBadge";
             badge.MouseFilter = Control.MouseFilterEnum.Ignore;
 
             // --- Main circle: tier letter ---
@@ -277,7 +277,7 @@ public static class CardBadgeOverlay
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] CreateBadge: {ex.Message}");
+            Log.Error($"[SmartPick] CreateBadge: {ex.Message}");
             return null;
         }
     }

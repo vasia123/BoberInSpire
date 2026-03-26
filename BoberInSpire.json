@@ -1,0 +1,11 @@
+﻿{
+  "id": "BoberInSpire",
+  "name": "BoberInSpire",
+  "author": "vasia123",
+  "description": "Shows card tier badges (S/A/B/C/D) on reward, deck, and merchant screens.",
+  "version": "2.0.0",
+  "has_pck": true,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": false
+}

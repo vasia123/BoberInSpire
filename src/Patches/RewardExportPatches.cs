@@ -60,17 +60,17 @@ public static class RewardExportPatches
                     if (method != null && method.GetParameters().Length <= 1)
                     {
                         _targetMethod = method;
-                        Log.Info($"[BoberInSpire] Reward patch target: {type.FullName}.{method.Name}");
+                        Log.Info($"[SmartPick] Reward patch target: {type.FullName}.{method.Name}");
                         return _targetMethod;
                     }
                 }
             }
 
-            Log.Info("[BoberInSpire] Reward patch: no reward screen type found, reward advisor disabled.");
+            Log.Info("[SmartPick] Reward patch: no reward screen type found, reward advisor disabled.");
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Reward patch discovery: {ex.Message}");
+            Log.Error($"[SmartPick] Reward patch discovery: {ex.Message}");
         }
 
         // Return a harmless dummy method so Harmony doesn't throw, effectively disabling this patch.
@@ -99,7 +99,7 @@ public static class RewardExportPatches
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] Reward export postfix: {ex.Message}");
+            Log.Error($"[SmartPick] Reward export postfix: {ex.Message}");
         }
     }
 
@@ -168,7 +168,7 @@ public static class RewardExportPatches
                 .FirstOrDefault();
             if (best.names != null && best.names.Count > 0)
             {
-                Log.Info($"[BoberInSpire] Reward options from {best.source}: {string.Join(", ", best.names)}");
+                Log.Info($"[SmartPick] Reward options from {best.source}: {string.Join(", ", best.names)}");
                 return best.names;
             }
             var fallback = candidates.FirstOrDefault();
@@ -177,7 +177,7 @@ public static class RewardExportPatches
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] ExtractRewardOptions: {ex.Message}");
+            Log.Error($"[SmartPick] ExtractRewardOptions: {ex.Message}");
         }
 
         return null;
@@ -270,17 +270,17 @@ public static class RewardsScreenExportPatches
             var options = names.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
             if (options.Count is >= 2 and <= 6)
             {
-                Log.Info($"[BoberInSpire] RewardsScreenExport: {options.Count} options: {string.Join(", ", options)}");
+                Log.Info($"[SmartPick] RewardsScreenExport: {options.Count} options: {string.Join(", ", options)}");
                 RewardExporter.ExportRewardState(options);
             }
             else if (options.Count > 0)
             {
-                Log.Info($"[BoberInSpire] RewardsScreenExport: skipped ({options.Count} titles, expected 2–6): {string.Join(", ", options)}");
+                Log.Info($"[SmartPick] RewardsScreenExport: skipped ({options.Count} titles, expected 2–6): {string.Join(", ", options)}");
             }
         }
         catch (Exception ex)
         {
-            Log.Error($"[BoberInSpire] RewardsScreenExport: {ex.Message}");
+            Log.Error($"[SmartPick] RewardsScreenExport: {ex.Message}");
         }
     }
 
@@ -368,7 +368,7 @@ public static class RewardsScreenClearPatches
     public static void AfterRewardsOverlayClosed()
     {
         try { RewardExporter.ClearRewardState(); }
-        catch (Exception ex) { Log.Error($"[BoberInSpire] RewardsScreenClear: {ex.Message}"); }
+        catch (Exception ex) { Log.Error($"[SmartPick] RewardsScreenClear: {ex.Message}"); }
         // Don't clear badges here — the card pick screen opens AFTER rewards overlay closes.
         // Badges will be cleared when the card pick is complete (next SetRewards or merchant close).
     }
