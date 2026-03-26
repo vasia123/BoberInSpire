@@ -2,6 +2,7 @@ using System.Reflection;
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 
 namespace FirstMod;
@@ -109,6 +110,13 @@ public static class CardBadgeOverlay
             if (child is NCardHolder holder && holder.CardModel != null)
             {
                 results.Add((holder, holder.CardModel));
+                continue;
+            }
+
+            // NCard — used in card bundles (stacked cards at run start)
+            if (child is NCard card && card.Model != null)
+            {
+                results.Add((card, card.Model));
                 continue;
             }
 

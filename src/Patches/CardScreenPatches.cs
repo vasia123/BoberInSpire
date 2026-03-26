@@ -2,6 +2,7 @@ using FirstMod;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Screens;
+using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.Shops;
 
@@ -64,6 +65,76 @@ public static class CardGridSelectionScreenClosePatch
     {
         CardBadgeOverlay.ActiveGridSelection = null;
         CardBadgeOverlay.ClearBadges();
+    }
+}
+
+/// <summary>
+/// Attach tier badges when the "choose a card" screen opens (e.g. after picking a bundle).
+/// NChooseACardSelectionScreen is a separate hierarchy (extends Control, not NCardGridSelectionScreen).
+/// </summary>
+[HarmonyPatch(typeof(NChooseACardSelectionScreen), nameof(NChooseACardSelectionScreen.AfterOverlayOpened))]
+public static class ChooseACardScreenOpenPatch
+{
+    [HarmonyPostfix]
+    public static void AfterOpened(NChooseACardSelectionScreen __instance)
+    {
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// Clear badges when "choose a card" screen closes.
+/// </summary>
+[HarmonyPatch(typeof(NChooseACardSelectionScreen), nameof(NChooseACardSelectionScreen.AfterOverlayClosed))]
+public static class ChooseACardScreenClosePatch
+{
+    [HarmonyPostfix]
+    public static void AfterClosed()
+    {
+        CardBadgeOverlay.ClearBadges();
+    }
+}
+
+/// <summary>
+/// Attach tier badges to card bundles (stacked cards) when bundle selection screen opens.
+/// </summary>
+[HarmonyPatch(typeof(NChooseABundleSelectionScreen), nameof(NChooseABundleSelectionScreen.AfterOverlayOpened))]
+public static class BundleScreenOpenPatch
+{
+    [HarmonyPostfix]
+    public static void AfterOpened(NChooseABundleSelectionScreen __instance)
+    {
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// Re-badge when bundle preview cards appear (after clicking a bundle pack).
+/// </summary>
+[HarmonyPatch(typeof(NChooseABundleSelectionScreen), "OnBundleClicked")]
+public static class BundlePreviewOpenPatch
+{
+    [HarmonyPostfix]
+    public static void AfterBundleClicked(NChooseABundleSelectionScreen __instance)
+    {
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// Re-badge stacked bundles when preview is cancelled (back to bundle selection).
+/// </summary>
+[HarmonyPatch(typeof(NChooseABundleSelectionScreen), "CancelSelection")]
+public static class BundleCancelPatch
+{
+    [HarmonyPostfix]
+    public static void AfterCancel(NChooseABundleSelectionScreen __instance)
+    {
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
     }
 }
 
@@ -155,5 +226,20 @@ public static class MerchantCloseBadgePatch
     {
         CardBadgeOverlay.ActiveMerchant = null;
         CardBadgeOverlay.ClearBadges();
+    }
+}
+
+/// <summary>
+/// Attach tier badges in the card compendium (card library) after cards are filtered/displayed.
+/// NCardLibraryGrid.FilterCards is called on open and every filter/sort change.
+/// </summary>
+[HarmonyPatch(typeof(NCardLibraryGrid), "FilterCards")]
+public static class CardLibraryFilterPatch
+{
+    [HarmonyPostfix]
+    public static void AfterFilter(NCardLibraryGrid __instance)
+    {
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
     }
 }
