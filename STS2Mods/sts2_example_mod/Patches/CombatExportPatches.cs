@@ -1,4 +1,5 @@
 using FirstMod;
+using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -89,6 +90,7 @@ public static class CombatExportPatches
             {
                 RewardExporter.ExportRewardState(cardTitles, "merchant_cards");
                 Log.Info($"[BoberInSpire] Merchant cards exported: {cardTitles.Count} — {string.Join(", ", cardTitles)}");
+                CardBadgeOverlay.AttachBadgesDeferred(__instance, CombatExporter.ResolveCharacterName());
             }
             else if (cardTitles.Count > 0)
             {
@@ -108,5 +110,7 @@ public static class CombatExportPatches
         CombatExporter.ClearMerchant();
         try { RewardExporter.ClearRewardState(); }
         catch (Exception ex) { Log.Error($"[BoberInSpire] Merchant close clear reward: {ex.Message}"); }
+        try { CardBadgeOverlay.ClearBadges(); }
+        catch { }
     }
 }

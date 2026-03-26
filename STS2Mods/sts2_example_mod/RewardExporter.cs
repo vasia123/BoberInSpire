@@ -15,6 +15,7 @@ public static class RewardExporter
     private static List<string> _cachedDeck = new();
     private static List<string> _cachedRelicNames = new();
     private static string _cachedCharacter = "Unknown";
+    public static string CachedCharacter => _cachedCharacter;
     private static string? _rewardOutputPath;
 
     /// <summary>

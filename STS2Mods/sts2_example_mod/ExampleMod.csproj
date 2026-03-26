@@ -28,6 +28,11 @@
 	</PropertyGroup>
 	
 	<ItemGroup>
+		<EmbeddedResource Include="..\..\data\tier_lists\mobalytics_cards.json" LogicalName="mobalytics_cards.json" />
+		<EmbeddedResource Include="..\..\data\tier_lists\slaythespire2_com_cards.json" LogicalName="slaythespire2_com_cards.json" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Reference Include="0Harmony">
 			<HintPath>$(GameDataDir)\0Harmony.dll</HintPath>
 		</Reference>

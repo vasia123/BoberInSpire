@@ -1,3 +1,4 @@
+using FirstMod;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Logging;
@@ -7,6 +8,7 @@ public class ModEntry
 {
     public static void Initialize()
     {
+        TierData.Initialize();
         var harmony = new Harmony("boberinspire.patch");
         harmony.PatchAll();
         Log.Info("[BoberInSpire] Harmony patches initialized.");

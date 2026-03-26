@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using FirstMod;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Logging;
@@ -256,7 +257,7 @@ public static class RewardExportPatches
 public static class RewardsScreenExportPatches
 {
     [HarmonyPostfix]
-    public static void AfterSetRewards(IEnumerable<Reward> rewards)
+    public static void AfterSetRewards(NRewardsScreen __instance, IEnumerable<Reward> rewards)
     {
         if (rewards == null) return;
 
@@ -271,6 +272,7 @@ public static class RewardsScreenExportPatches
             {
                 Log.Info($"[BoberInSpire] RewardsScreenExport: {options.Count} options: {string.Join(", ", options)}");
                 RewardExporter.ExportRewardState(options);
+                CardBadgeOverlay.AttachBadgesDeferred(__instance, CombatExporter.ResolveCharacterName());
             }
             else if (options.Count > 0)
             {
@@ -368,5 +370,7 @@ public static class RewardsScreenClearPatches
     {
         try { RewardExporter.ClearRewardState(); }
         catch (Exception ex) { Log.Error($"[BoberInSpire] RewardsScreenClear: {ex.Message}"); }
+        // Don't clear badges here — the card pick screen opens AFTER rewards overlay closes.
+        // Badges will be cleared when the card pick is complete (next SetRewards or merchant close).
     }
 }

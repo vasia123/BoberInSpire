@@ -33,6 +33,9 @@ public static class CombatExporter
     /// <summary>Player used for map-mode shop JSON when there is no active combat state; refreshed when the shop closes.</summary>
     private static Player? _playerForLastMerchantMapExport;
 
+    /// <summary>Last known Player instance — used by badge overlay to resolve character outside combat.</summary>
+    public static Player? LastKnownPlayer { get; private set; }
+
     public static void SetCombatState(CombatState? cs)
     {
         _combat = cs;
@@ -100,6 +103,7 @@ public static class CombatExporter
     public static void RequestExportFrom(Player? player)
     {
         if (player == null) return;
+        LastKnownPlayer = player;
 
         if (_combat == null)
         {
@@ -569,6 +573,62 @@ public static class CombatExporter
         if (master.Count > 0)
             return master;
         return BuildDeckInternal(pcs, combat, player);
+    }
+
+    /// <summary>
+    /// Best-effort character name resolution: cached player → scene tree search → "Unknown".
+    /// </summary>
+    public static string ResolveCharacterName()
+    {
+        if (LastKnownPlayer != null)
+            return GetCharacterNameInternal(LastKnownPlayer);
+
+        // Try to find Player in the scene tree
+        try
+        {
+            var sceneTree = Engine.GetMainLoop() as SceneTree;
+            var root = sceneTree?.Root;
+            if (root != null)
+            {
+                var player = FindPlayerInTree(root, 0);
+                if (player != null)
+                {
+                    LastKnownPlayer = player;
+                    return GetCharacterNameInternal(player);
+                }
+            }
+        }
+        catch { }
+
+        return "Unknown";
+    }
+
+    private static Player? FindPlayerInTree(Node parent, int depth)
+    {
+        if (depth > 8) return null;
+        foreach (var child in parent.GetChildren())
+        {
+            // Player doesn't inherit from Node; search properties via reflection
+            try
+            {
+                var t = child.GetType();
+                foreach (var prop in t.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+                {
+                    if (typeof(Player).IsAssignableFrom(prop.PropertyType))
+                    {
+                        if (prop.GetValue(child) is Player p)
+                        {
+                            Log.Info($"[BoberInSpire] Found Player via {t.Name}.{prop.Name}");
+                            return p;
+                        }
+                    }
+                }
+            }
+            catch { }
+            var found = FindPlayerInTree(child, depth + 1);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     internal static string GetCharacterNameInternal(Player? player)
