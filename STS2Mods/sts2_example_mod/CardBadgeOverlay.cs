@@ -25,7 +25,6 @@ public static class CardBadgeOverlay
     };
 
     private static bool _running;
-    private static string _character = "";
 
     /// <summary>
     /// Start the background monitor that continuously scans for card holders.
@@ -55,24 +54,19 @@ public static class CardBadgeOverlay
         var root = (Engine.GetMainLoop() as SceneTree)?.Root;
         if (root == null) return;
 
-        // Resolve character if not set yet
-        if (string.IsNullOrEmpty(_character) || _character == "Unknown")
-            _character = CombatExporter.ResolveCharacterName();
+        var character = CombatExporter.ResolveCharacterName();
 
-        // Find all NGridCardHolder nodes in the tree
         var holders = new List<(Node holder, string cardName)>();
         FindAllCardHolders(root, holders, 0);
 
-        // Remove badges for holders that no longer exist
         CleanupStale();
 
-        // Attach badges to new holders
         foreach (var (holder, cardName) in holders)
         {
             var id = holder.GetInstanceId();
             if (_badgedHolders.Contains(id)) continue;
 
-            var tiers = TierData.GetTiers(_character, cardName);
+            var tiers = TierData.GetTiers(character, cardName);
             if (tiers.BlendedScore < 0) continue;
 
             var badge = CreateBadge(tiers, holder);

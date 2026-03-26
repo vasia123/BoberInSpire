@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
+using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Logging;
 
 namespace FirstMod;
@@ -576,26 +577,21 @@ public static class CombatExporter
     }
 
     /// <summary>
-    /// Best-effort character name resolution: cached player → scene tree search → "Unknown".
+    /// Best-effort character name resolution: cached player → NRun._state → "Unknown".
     /// </summary>
     public static string ResolveCharacterName()
     {
         if (LastKnownPlayer != null)
             return GetCharacterNameInternal(LastKnownPlayer);
 
-        // Try to find Player in the scene tree
+        // Get Player from NRun._state.Players[0] via scene tree
         try
         {
-            var sceneTree = Engine.GetMainLoop() as SceneTree;
-            var root = sceneTree?.Root;
-            if (root != null)
+            var player = GetPlayerFromRunState();
+            if (player != null)
             {
-                var player = FindPlayerInTree(root, 0);
-                if (player != null)
-                {
-                    LastKnownPlayer = player;
-                    return GetCharacterNameInternal(player);
-                }
+                LastKnownPlayer = player;
+                return GetCharacterNameInternal(player);
             }
         }
         catch { }
@@ -603,32 +599,23 @@ public static class CombatExporter
         return "Unknown";
     }
 
-    private static Player? FindPlayerInTree(Node parent, int depth)
+    private static Player? GetPlayerFromRunState()
     {
-        if (depth > 8) return null;
-        foreach (var child in parent.GetChildren())
-        {
-            // Player doesn't inherit from Node; search properties via reflection
-            try
-            {
-                var t = child.GetType();
-                foreach (var prop in t.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
-                {
-                    if (typeof(Player).IsAssignableFrom(prop.PropertyType))
-                    {
-                        if (prop.GetValue(child) is Player p)
-                        {
-                            Log.Info($"[BoberInSpire] Found Player via {t.Name}.{prop.Name}");
-                            return p;
-                        }
-                    }
-                }
-            }
-            catch { }
-            var found = FindPlayerInTree(child, depth + 1);
-            if (found != null) return found;
-        }
-        return null;
+        var sceneTree = Engine.GetMainLoop() as SceneTree;
+        var root = sceneTree?.Root;
+        if (root == null) return null;
+
+        // Path: root → Game → RootSceneContainer → Run [NRun]
+        var nRun = root.FindChild("Run", true, false);
+        if (nRun == null) return null;
+
+        // NRun has private RunState _state field
+        var stateField = nRun.GetType().GetField("_state",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (stateField?.GetValue(nRun) is not MegaCrit.Sts2.Core.Runs.RunState runState)
+            return null;
+
+        return runState.Players.Count > 0 ? runState.Players[0] : null;
     }
 
     internal static string GetCharacterNameInternal(Player? player)
