@@ -30,6 +30,7 @@ dist/
 build/
 venv/
 .venv/
+*.spec.bak
 
 # ── IDE ──
 .cursor/

@@ -1,11 +1,11 @@
 """Translate localized card/relic names to English for matching.
 
-Loads ``data/game_localization/translation_map.json`` (produced by
-``scripts/extract_translations.py``) and builds reverse look-ups from every
-supported language back to English.
+Loads ``data/game_localization/translation_map.json`` and builds reverse
+look-ups from every supported language back to English.
 
-If the translation map is missing, translation is a no-op — the system falls
-back to its original English-only behaviour.
+On first access, if the translation map is missing but the game is installed,
+it is extracted automatically from the game's PCK file.  If the game is not
+found, translation is a no-op — the system falls back to English-only behaviour.
 """
 from __future__ import annotations
 
@@ -18,9 +18,31 @@ from .paths import DATA_DIR
 TRANSLATION_MAP_PATH = DATA_DIR / "game_localization" / "translation_map.json"
 
 
+def _try_auto_extract() -> None:
+    """Attempt to extract translations from the game PCK if game is installed."""
+    if TRANSLATION_MAP_PATH.exists():
+        return
+    try:
+        from .paths import find_game_dir
+        from .pck_extractor import extract_translations
+        game_dir = find_game_dir()
+        if game_dir is None:
+            return
+        TRANSLATION_MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
+        result = extract_translations(game_dir)
+        with open(TRANSLATION_MAP_PATH, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass  # Non-critical — overlay works without translations
+
+
 @lru_cache(maxsize=1)
 def _load_translation_map() -> dict:
-    """Load the full translation map from disk (cached)."""
+    """Load the full translation map from disk (cached).
+
+    Triggers auto-extraction on first call if the map file is missing.
+    """
+    _try_auto_extract()
     if not TRANSLATION_MAP_PATH.exists():
         return {}
     with open(TRANSLATION_MAP_PATH, encoding="utf-8") as f:

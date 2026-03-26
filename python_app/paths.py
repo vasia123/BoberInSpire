@@ -11,7 +11,13 @@ from functools import lru_cache
 from pathlib import Path
 
 # ── Project layout ───────────────────────────────────────────────────
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+# PyInstaller sets sys._MEIPASS; frozen builds keep data/ next to the exe.
+import sys as _sys
+if getattr(_sys, "frozen", False):
+    _BASE_DIR = Path(_sys.executable).resolve().parent
+else:
+    _BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = _BASE_DIR / "data"
 
 # ── Game state files (written by the C# mod into Godot's user://) ───
 _STS2_APPDATA_FOLDER = "SlayTheSpire2"
