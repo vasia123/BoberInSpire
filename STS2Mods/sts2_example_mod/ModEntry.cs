@@ -11,6 +11,7 @@ public class ModEntry
         TierData.Initialize();
         var harmony = new Harmony("boberinspire.patch");
         harmony.PatchAll();
+        CardBadgeOverlay.StartMonitor();
         Log.Info("[BoberInSpire] Harmony patches initialized.");
     }
 }

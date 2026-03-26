@@ -257,7 +257,7 @@ public static class RewardExportPatches
 public static class RewardsScreenExportPatches
 {
     [HarmonyPostfix]
-    public static void AfterSetRewards(NRewardsScreen __instance, IEnumerable<Reward> rewards)
+    public static void AfterSetRewards(IEnumerable<Reward> rewards)
     {
         if (rewards == null) return;
 
@@ -272,7 +272,6 @@ public static class RewardsScreenExportPatches
             {
                 Log.Info($"[BoberInSpire] RewardsScreenExport: {options.Count} options: {string.Join(", ", options)}");
                 RewardExporter.ExportRewardState(options);
-                CardBadgeOverlay.AttachBadgesDeferred(__instance, CombatExporter.ResolveCharacterName());
             }
             else if (options.Count > 0)
             {

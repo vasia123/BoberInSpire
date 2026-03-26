@@ -113,8 +113,15 @@ public static class TierData
     private static string NormalizeCharacter(string character)
     {
         if (string.IsNullOrEmpty(character)) return "";
-        // Game may return "IroncladPlayer" or "Ironclad" etc.
-        var s = character.Replace("Player", "").Trim();
+        var s = character;
+        // Handle "CHARACTER.SILENT (18436160)" format
+        var parenIdx = s.IndexOf('(');
+        if (parenIdx > 0) s = s.Substring(0, parenIdx).Trim();
+        // Handle "CHARACTER.SILENT" format
+        var dotIdx = s.LastIndexOf('.');
+        if (dotIdx >= 0) s = s.Substring(dotIdx + 1);
+        // Handle "IroncladPlayer" format
+        s = s.Replace("Player", "").Trim();
         return s.ToLowerInvariant();
     }
 

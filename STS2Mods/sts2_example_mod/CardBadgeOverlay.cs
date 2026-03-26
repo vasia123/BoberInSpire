@@ -1,146 +1,115 @@
-using System.Reflection;
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
-using MegaCrit.Sts2.Core.Models;
 
 namespace FirstMod;
 
 /// <summary>
-/// Creates and manages tier badges on card nodes in the reward/merchant screens.
-/// Badges show a colored circle (S/A/B/C/D) with a blended score next to each card.
+/// Continuously monitors the scene tree for NGridCardHolder nodes and attaches
+/// tier badges (colored circle + score) to any card that has tier data.
+/// Works on reward screens, deck view, merchant, etc.
 /// </summary>
 public static class CardBadgeOverlay
 {
+    private static readonly HashSet<ulong> _badgedHolders = new();
     private static readonly List<Node> _badges = new();
 
     private static readonly Dictionary<string, Color> TierColors = new()
     {
-        ["S"] = new Color("4dff9e"),
-        ["A"] = new Color("ffcc4d"),
-        ["B"] = new Color("7ec8ff"),
-        ["C"] = new Color("f4d080"),
-        ["D"] = new Color("ff9aab"),
-        ["F"] = new Color("aab8ce"),
-        ["?"] = new Color("888888"),
+        ["S"] = new Color("ff8000"),  // orange — legendary
+        ["A"] = new Color("a335ee"),  // purple — epic
+        ["B"] = new Color("0070dd"),  // blue — rare
+        ["C"] = new Color("1eff00"),  // green — uncommon
+        ["D"] = new Color("9d9d9d"),  // grey — poor
+        ["F"] = new Color("9d9d9d"),  // grey
+        ["?"] = new Color("666666"),
     };
 
-    private static string _pendingCharacter = "";
-    private static bool _polling;
+    private static bool _running;
+    private static string _character = "";
 
     /// <summary>
-    /// Start watching for card nodes to appear in NCardRewardSelectionScreen.
-    /// Cards appear only after the player clicks the "Card Reward" button.
+    /// Start the background monitor that continuously scans for card holders.
+    /// Called once at mod init. Safe to call multiple times.
     /// </summary>
-    public static void AttachBadgesDeferred(Node screenNode, string character)
+    public static void StartMonitor()
     {
-        _pendingCharacter = character;
-        if (_polling) return;
-        _polling = true;
+        if (_running) return;
+        _running = true;
 
         Task.Run(async () =>
         {
-            try
+            while (_running)
             {
-                for (int i = 0; i < 150 && _polling; i++)
+                await Task.Delay(500);
+                Callable.From(() =>
                 {
-                    await Task.Delay(200);
-                    Callable.From(() =>
-                    {
-                        try { TryAttachToPreviewContainers(); }
-                        catch (Exception ex) { Log.Error($"[BoberInSpire] CardBadge deferred: {ex.Message}"); }
-                    }).CallDeferred();
-                    await Task.Delay(50);
-                    if (_badges.Count > 0) break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"[BoberInSpire] CardBadge polling: {ex.Message}");
-            }
-            finally
-            {
-                _polling = false;
+                    try { ScanAndBadge(); }
+                    catch (Exception ex) { Log.Error($"[BoberInSpire] CardBadge scan: {ex.Message}"); }
+                }).CallDeferred();
             }
         });
     }
 
-    public static void ClearBadges()
+    private static void ScanAndBadge()
     {
-        _polling = false;
+        var root = (Engine.GetMainLoop() as SceneTree)?.Root;
+        if (root == null) return;
 
+        // Resolve character if not set yet
+        if (string.IsNullOrEmpty(_character) || _character == "Unknown")
+            _character = CombatExporter.ResolveCharacterName();
+
+        // Find all NGridCardHolder nodes in the tree
+        var holders = new List<(Node holder, string cardName)>();
+        FindAllCardHolders(root, holders, 0);
+
+        // Remove badges for holders that no longer exist
+        CleanupStale();
+
+        // Attach badges to new holders
+        foreach (var (holder, cardName) in holders)
+        {
+            var id = holder.GetInstanceId();
+            if (_badgedHolders.Contains(id)) continue;
+
+            var tiers = TierData.GetTiers(_character, cardName);
+            if (tiers.BlendedScore < 0) continue;
+
+            var badge = CreateBadge(tiers, holder);
+            if (badge != null)
+            {
+                _badges.Add(badge);
+                _badgedHolders.Add(id);
+            }
+        }
+    }
+
+    private static void CleanupStale()
+    {
+        for (int i = _badges.Count - 1; i >= 0; i--)
+        {
+            var badge = _badges[i];
+            if (!GodotObject.IsInstanceValid(badge) || !badge.IsInsideTree())
+            {
+                try { if (GodotObject.IsInstanceValid(badge)) badge.QueueFree(); }
+                catch { }
+                _badges.RemoveAt(i);
+            }
+        }
+
+        // Rebuild holder ID set from surviving badges
+        _badgedHolders.Clear();
         foreach (var badge in _badges)
         {
-            try
-            {
-                if (GodotObject.IsInstanceValid(badge))
-                    badge.QueueFree();
-            }
-            catch { }
-        }
-        _badges.Clear();
-    }
-
-    private static bool TryAttachToPreviewContainers()
-    {
-        if (_badges.Count > 0) return true;
-
-        var root = (Engine.GetMainLoop() as SceneTree)?.Root;
-        if (root == null) return false;
-
-        var containers = new List<Node>();
-        FindNodesByType(root, "NCardRewardSelectionScreen", containers, 0);
-
-        foreach (var container in containers)
-        {
-            if (container.GetChildCount() == 0) continue;
-
-            var cardNodes = new List<(Node node, string cardName)>();
-            FindCardHolders(container, cardNodes, 0);
-
-            if (cardNodes.Count < 2) continue;
-
-            foreach (var (node, cardName) in cardNodes)
-            {
-                var tiers = TierData.GetTiers(_pendingCharacter, cardName);
-                if (tiers.BlendedScore < 0) continue;
-
-                var badge = CreateBadge(tiers, node, cardName);
-                if (badge != null)
-                    _badges.Add(badge);
-            }
-
-            if (_badges.Count > 0)
-            {
-                Log.Info($"[BoberInSpire] CardBadge: attached {_badges.Count} badges");
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static void FindNodesByType(Node parent, string targetType, List<Node> results, int depth)
-    {
-        if (depth > 8) return;
-        if (parent.GetType().Name == targetType)
-        {
-            results.Add(parent);
-            return;
-        }
-        foreach (var child in parent.GetChildren())
-        {
-            if (child != null)
-                FindNodesByType(child, targetType, results, depth + 1);
+            var parent = badge.GetParent();
+            if (parent != null)
+                _badgedHolders.Add(parent.GetInstanceId());
         }
     }
 
-    /// <summary>
-    /// Find NGridCardHolder nodes and extract card names from node names.
-    /// E.g. "GridCardHolder-CARD_SWORD_BOOMERANG" → "Sword Boomerang".
-    /// </summary>
-    private static void FindCardHolders(Node parent, List<(Node, string)> results, int depth)
+    private static void FindAllCardHolders(Node parent, List<(Node, string)> results, int depth)
     {
-        if (depth > 10) return;
+        if (depth > 15) return;
         foreach (var child in parent.GetChildren())
         {
             if (child == null) continue;
@@ -148,20 +117,23 @@ public static class CardBadgeOverlay
             {
                 if (child.GetType().Name == "NGridCardHolder")
                 {
+                    // Only badge visible holders
+                    if (child is Control ctrl && !ctrl.Visible) continue;
+
                     var cardName = ExtractCardNameFromHolder(child);
                     if (!string.IsNullOrEmpty(cardName))
                     {
                         results.Add((child, cardName!));
-                        continue;
+                        continue; // don't recurse into holder
                     }
                 }
-                FindCardHolders(child, results, depth + 1);
+                FindAllCardHolders(child, results, depth + 1);
             }
             catch { }
         }
     }
 
-    private static PanelContainer? CreateBadge(TierData.TierResult tiers, Node cardHolder, string cardName)
+    private static PanelContainer? CreateBadge(TierData.TierResult tiers, Node cardHolder)
     {
         try
         {
@@ -205,16 +177,19 @@ public static class CardBadgeOverlay
             tierLabel.Text = tiers.BlendedTier;
             tierLabel.HorizontalAlignment = HorizontalAlignment.Center;
             tierLabel.VerticalAlignment = VerticalAlignment.Center;
-            tierLabel.AddThemeColorOverride("font_color", new Color(0.05f, 0.05f, 0.1f));
+            var textColor = (tiers.BlendedTier is "A" or "B" or "D" or "F" or "?")
+                ? new Color(1f, 1f, 1f)
+                : new Color(0.05f, 0.05f, 0.1f);
+            tierLabel.AddThemeColorOverride("font_color", textColor);
             tierLabel.AddThemeFontSizeOverride("font_size", 16);
             tierLabel.MouseFilter = Control.MouseFilterEnum.Ignore;
             circle.AddChild(tierLabel);
 
-            // Blended score label
+            // Score label
             var scoreLabel = new Label();
             scoreLabel.Text = $"{tiers.BlendedScore}";
             scoreLabel.VerticalAlignment = VerticalAlignment.Center;
-            scoreLabel.AddThemeColorOverride("font_color", color);
+            scoreLabel.AddThemeColorOverride("font_color", new Color(1f, 1f, 1f));
             scoreLabel.AddThemeFontSizeOverride("font_size", 14);
             scoreLabel.MouseFilter = Control.MouseFilterEnum.Ignore;
 
@@ -222,8 +197,7 @@ public static class CardBadgeOverlay
             hbox.AddChild(scoreLabel);
             badge.AddChild(hbox);
 
-            // NGridCardHolder origin is at card center; Hitbox is 300x422
-            // Place badge near top-right of card, beside the card name
+            // NGridCardHolder origin is at card center; place near top-right
             badge.Position = new Vector2(100, -200);
 
             cardHolder.AddChild(badge);
