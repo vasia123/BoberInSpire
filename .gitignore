@@ -15,6 +15,9 @@ pack/images/relics/*.import
 # Generated manifests
 SmartPick.json
 
+# Generated localization data
+data/game_localization/
+
 # Local config (user-specific paths)
 local.props
 
