@@ -17,6 +17,7 @@ public static class CardBadgeOverlay
     /// <summary>Track open screens for re-badging after overlapping screen closes.</summary>
     public static Node? ActiveMerchant { get; set; }
     public static Node? ActiveRewardScreen { get; set; }
+    public static Node? ActiveGridSelection { get; set; }
 
     private static readonly Dictionary<string, Color> TierColors = new()
     {

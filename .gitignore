@@ -32,6 +32,9 @@ local.props
 build/
 dist/
 
+# Workshop upload artifacts
+workshop/content/
+
 # OS
 Thumbs.db
 Desktop.ini

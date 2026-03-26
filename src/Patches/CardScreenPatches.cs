@@ -37,6 +37,37 @@ public static class CardRewardScreenClosePatch
 }
 
 /// <summary>
+/// Attach tier badges when any card grid selection screen opens (forge, transform, enchant, etc.).
+/// Patches the base class NCardGridSelectionScreen to catch all grid-based selection screens.
+/// NCardRewardSelectionScreen is a separate hierarchy and is NOT affected by this patch.
+/// </summary>
+[HarmonyPatch(typeof(NCardGridSelectionScreen), nameof(NCardGridSelectionScreen.AfterOverlayOpened))]
+public static class CardGridSelectionScreenOpenPatch
+{
+    [HarmonyPostfix]
+    public static void AfterOpened(NCardGridSelectionScreen __instance)
+    {
+        CardBadgeOverlay.ActiveGridSelection = __instance;
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// Clear badges when any card grid selection screen closes.
+/// </summary>
+[HarmonyPatch(typeof(NCardGridSelectionScreen), nameof(NCardGridSelectionScreen.AfterOverlayClosed))]
+public static class CardGridSelectionScreenClosePatch
+{
+    [HarmonyPostfix]
+    public static void AfterClosed()
+    {
+        CardBadgeOverlay.ActiveGridSelection = null;
+        CardBadgeOverlay.ClearBadges();
+    }
+}
+
+/// <summary>
 /// Attach tier badges when any card view screen opens (deck view, etc).
 /// Patches the base class NCardsViewScreen to catch all card view screens.
 /// </summary>
@@ -67,7 +98,7 @@ public static class DeckViewDisplayCardsPatch
 }
 
 /// <summary>
-/// When card view (deck) closes, re-badge the screen underneath (merchant or reward).
+/// When card view (deck) closes, re-badge the screen underneath (merchant, reward, or grid selection).
 /// </summary>
 [HarmonyPatch(typeof(NCardsViewScreen), nameof(NCardsViewScreen.AfterCapstoneClosed))]
 public static class CardsViewClosePatch
@@ -88,6 +119,12 @@ public static class CardsViewClosePatch
             && ((Control)CardBadgeOverlay.ActiveRewardScreen).Visible)
         {
             CardBadgeOverlay.AttachBadgesDeferred(CardBadgeOverlay.ActiveRewardScreen);
+        }
+        else if (CardBadgeOverlay.ActiveGridSelection != null
+            && GodotObject.IsInstanceValid(CardBadgeOverlay.ActiveGridSelection)
+            && ((Control)CardBadgeOverlay.ActiveGridSelection).Visible)
+        {
+            CardBadgeOverlay.AttachBadgesDeferred(CardBadgeOverlay.ActiveGridSelection);
         }
     }
 }
