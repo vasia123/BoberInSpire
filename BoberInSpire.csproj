@@ -1,35 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<!-- Import user-specific paths -->
 	<Import Project="local.props" Condition="Exists('local.props')" />
-	
+
 	<PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<PlatformTarget>x64</PlatformTarget>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		
-		<!-- ↓ MOD METADATA -->
+
 		<ModName>BoberInSpire</ModName>
 		<ModDisplayName>BoberInSpire</ModDisplayName>
-		<ModAuthor>BoberInSpire</ModAuthor>
-		<ModVersion>1.2.0</ModVersion>
-		
+		<ModAuthor>vasia123</ModAuthor>
+		<ModVersion>2.0.0</ModVersion>
+
 		<AssemblyName>$(ModName)</AssemblyName>
 		<Version>$(ModVersion)</Version>
-		
-		<!-- Fallback defaults if local.props missing -->
+
 		<STS2GamePath Condition="'$(STS2GamePath)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2</STS2GamePath>
 		<GodotExePath Condition="'$(GodotExePath)' == ''">godot</GodotExePath>
-		
-		<!-- Derived paths -->
+
 		<ModsOutputDir>$(STS2GamePath)\mods</ModsOutputDir>
 		<GameDataDir>$(STS2GamePath)\data_sts2_windows_x86_64</GameDataDir>
 		<PackProject>$(ProjectDir)pack</PackProject>
 	</PropertyGroup>
-	
+
 	<ItemGroup>
-		<EmbeddedResource Include="..\..\data\tier_lists\mobalytics_cards.json" LogicalName="mobalytics_cards.json" />
-		<EmbeddedResource Include="..\..\data\tier_lists\slaythespire2_com_cards.json" LogicalName="slaythespire2_com_cards.json" />
+		<EmbeddedResource Include="data\tier_lists\mobalytics_cards.json" LogicalName="mobalytics_cards.json" />
+		<EmbeddedResource Include="data\tier_lists\slaythespire2_com_cards.json" LogicalName="slaythespire2_com_cards.json" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -43,8 +39,7 @@
 			<HintPath>$(GameDataDir)\sts2.dll</HintPath>
 		</Reference>
 	</ItemGroup>
-	
-	<!-- Generate project.godot before build -->
+
 	<Target Name="GenerateProjectGodot" BeforeTargets="BeforeBuild">
 		<PropertyGroup>
 			<ProjectGodotPath>$(PackProject)\project.godot</ProjectGodotPath>
@@ -58,12 +53,9 @@ config/features=PackedStringArray("4.5", "Forward Plus")
 project/assembly_name="$(ModName)"
 </ProjectGodotContent>
 		</PropertyGroup>
-		
 		<WriteLinesToFile File="$(ProjectGodotPath)" Lines="$(ProjectGodotContent)" Overwrite="true" Encoding="UTF-8" />
-		<Message Text="Generated project.godot" Importance="high" />
 	</Target>
-	
-	<!-- Generate Godot mod manifest (packed into .pck) -->
+
 	<Target Name="GenerateModManifest" BeforeTargets="BeforeBuild">
 		<PropertyGroup>
 			<ModManifestPath>$(PackProject)\mod_manifest.json</ModManifestPath>
@@ -74,12 +66,9 @@ project/assembly_name="$(ModName)"
   "version": "$(ModVersion)"
 }</ModManifestContent>
 		</PropertyGroup>
-		
 		<WriteLinesToFile File="$(ModManifestPath)" Lines="$(ModManifestContent)" Overwrite="true" Encoding="UTF-8" />
-		<Message Text="Generated mod_manifest.json" Importance="high" />
 	</Target>
 
-	<!-- Generate STS2 v0.99+ loader manifest (json next to dll/pck in /mods) -->
 	<Target Name="GenerateLoaderManifest" BeforeTargets="BeforeBuild">
 		<PropertyGroup>
 			<LoaderManifestPath>$(ProjectDir)$(ModName).json</LoaderManifestPath>
@@ -87,19 +76,17 @@ project/assembly_name="$(ModName)"
   "id": "$(ModName)",
   "name": "$(ModDisplayName)",
   "author": "$(ModAuthor)",
-  "description": "Combat and reward overlay data exporter for BoberInSpire.",
+  "description": "Shows card tier badges (S/A/B/C/D) on reward, deck, and merchant screens.",
   "version": "$(ModVersion)",
   "has_pck": true,
   "has_dll": true,
   "dependencies": [],
-  "affects_gameplay": true
+  "affects_gameplay": false
 }</LoaderManifestContent>
 		</PropertyGroup>
-
 		<WriteLinesToFile File="$(LoaderManifestPath)" Lines="$(LoaderManifestContent)" Overwrite="true" Encoding="UTF-8" />
-		<Message Text="Generated loader manifest: $(LoaderManifestPath)" Importance="high" />
 	</Target>
-	
+
 	<Target Name="PostBuild" AfterTargets="Build">
 		<MakeDir Directories="$(ModsOutputDir)" />
 		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModsOutputDir)" />

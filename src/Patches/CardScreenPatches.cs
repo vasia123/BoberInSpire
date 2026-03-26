@@ -1,0 +1,122 @@
+using FirstMod;
+using Godot;
+using HarmonyLib;
+using MegaCrit.Sts2.Core.Nodes.Screens;
+using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
+using MegaCrit.Sts2.Core.Nodes.Screens.Shops;
+
+namespace FirstMod.Patches;
+
+/// <summary>
+/// Attach tier badges when the card reward selection screen opens (post-combat / event card pick).
+/// </summary>
+[HarmonyPatch(typeof(NCardRewardSelectionScreen), nameof(NCardRewardSelectionScreen.AfterOverlayOpened))]
+public static class CardRewardScreenOpenPatch
+{
+    [HarmonyPostfix]
+    public static void AfterOpened(NCardRewardSelectionScreen __instance)
+    {
+        CardBadgeOverlay.ActiveRewardScreen = __instance;
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// Clear badges when card reward screen closes.
+/// </summary>
+[HarmonyPatch(typeof(NCardRewardSelectionScreen), nameof(NCardRewardSelectionScreen.AfterOverlayClosed))]
+public static class CardRewardScreenClosePatch
+{
+    [HarmonyPostfix]
+    public static void AfterClosed()
+    {
+        CardBadgeOverlay.ActiveRewardScreen = null;
+        CardBadgeOverlay.ClearBadges();
+    }
+}
+
+/// <summary>
+/// Attach tier badges when any card view screen opens (deck view, etc).
+/// Patches the base class NCardsViewScreen to catch all card view screens.
+/// </summary>
+[HarmonyPatch(typeof(NCardsViewScreen), nameof(NCardsViewScreen.AfterCapstoneOpened))]
+public static class CardsViewOpenPatch
+{
+    [HarmonyPostfix]
+    public static void AfterOpened(NCardsViewScreen __instance)
+    {
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// Re-badge after deck view sorts/refreshes cards (only while screen is visible).
+/// </summary>
+[HarmonyPatch(typeof(NDeckViewScreen), "DisplayCards")]
+public static class DeckViewDisplayCardsPatch
+{
+    [HarmonyPostfix]
+    public static void AfterDisplayCards(NDeckViewScreen __instance)
+    {
+        if (!__instance.Visible) return;
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// When card view (deck) closes, re-badge the screen underneath (merchant or reward).
+/// </summary>
+[HarmonyPatch(typeof(NCardsViewScreen), nameof(NCardsViewScreen.AfterCapstoneClosed))]
+public static class CardsViewClosePatch
+{
+    [HarmonyPostfix]
+    public static void AfterClosed()
+    {
+        CardBadgeOverlay.ClearBadges();
+
+        // Re-badge the screen underneath if still open
+        if (CardBadgeOverlay.ActiveMerchant != null
+            && GodotObject.IsInstanceValid(CardBadgeOverlay.ActiveMerchant))
+        {
+            CardBadgeOverlay.AttachBadgesDeferred(CardBadgeOverlay.ActiveMerchant);
+        }
+        else if (CardBadgeOverlay.ActiveRewardScreen != null
+            && GodotObject.IsInstanceValid(CardBadgeOverlay.ActiveRewardScreen)
+            && ((Control)CardBadgeOverlay.ActiveRewardScreen).Visible)
+        {
+            CardBadgeOverlay.AttachBadgesDeferred(CardBadgeOverlay.ActiveRewardScreen);
+        }
+    }
+}
+
+/// <summary>
+/// Attach tier badges when merchant shop opens.
+/// </summary>
+[HarmonyPatch(typeof(NMerchantInventory), nameof(NMerchantInventory.Open))]
+public static class MerchantOpenBadgePatch
+{
+    [HarmonyPostfix]
+    public static void AfterOpen(NMerchantInventory __instance)
+    {
+        CardBadgeOverlay.ActiveMerchant = __instance;
+        CardBadgeOverlay.ClearBadges();
+        CardBadgeOverlay.AttachBadgesDeferred(__instance);
+    }
+}
+
+/// <summary>
+/// Clear badges when merchant shop closes.
+/// </summary>
+[HarmonyPatch(typeof(NMerchantInventory), "Close")]
+public static class MerchantCloseBadgePatch
+{
+    [HarmonyPostfix]
+    public static void AfterClose()
+    {
+        CardBadgeOverlay.ActiveMerchant = null;
+        CardBadgeOverlay.ClearBadges();
+    }
+}
