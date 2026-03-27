@@ -1,8 +1,10 @@
-# SmartPick — Card Tier Badges for Slay the Spire 2
+# SmartPick — Card & Relic Tier Badges for Slay the Spire 2
 
 ![Card tier badges in action](example.png)
 
-A lightweight mod that shows **card tier ratings** directly on cards in Slay the Spire 2. Instantly see which cards are S-tier picks and which are trash — no external overlay needed.
+![Merchant screen with card and relic badges](example-merchant.png)
+
+A lightweight mod that shows **tier ratings** directly on cards and relics in Slay the Spire 2. Instantly see which picks are S-tier and which are trash — no external overlay needed.
 
 ## Features
 
@@ -10,7 +12,16 @@ A lightweight mod that shows **card tier ratings** directly on cards in Slay the
   - Card reward screen (post-combat & events)
   - Deck view
   - Merchant shop
-- **Two tier sources blended** — combines [Mobalytics](https://mobalytics.gg/slay-the-spire-2/tier-lists/cards) and [slaythespire-2.com](https://slaythespire-2.com/card-tier) tier lists into a single rating
+  - Card forge / transform / enchant / remove screens
+  - Bundle selection (start of run)
+  - Card compendium (library)
+- **Tier badges on relics** — shown on:
+  - Relic reward screen (post-combat)
+  - Merchant shop
+  - Treasure room
+  - Relic compendium
+- **Two card tier sources blended** — combines [Mobalytics](https://mobalytics.gg/slay-the-spire-2/tier-lists/cards) and [slaythespire-2.com](https://slaythespire-2.com/card-tier) tier lists into a single rating
+- **Relic tiers** from [Mobalytics](https://mobalytics.gg/slay-the-spire-2/tier-lists/relics) (global, not per-character)
 - **All 5 characters supported** — Ironclad, Silent, Defect, Regent, Necrobinder
 - **WoW-style color coding:**
   - **S** — Orange (legendary)
@@ -62,6 +73,7 @@ Tier data from two community sources is embedded in the DLL as JSON resources an
 
 - **[Mobalytics](https://mobalytics.gg/slay-the-spire-2/tier-lists/cards)** — card tier list
 - **[slaythespire-2.com](https://slaythespire-2.com/card-tier)** — community wiki card tiers
+- **[Mobalytics](https://mobalytics.gg/slay-the-spire-2/tier-lists/relics)** — relic tier list
 
 Tier list JSONs are in `data/tier_lists/`. Replace them to update ratings.
 

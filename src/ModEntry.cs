@@ -9,8 +9,16 @@ public class ModEntry
     public static void Initialize()
     {
         TierData.Initialize();
+        RelicTierData.Initialize();
         var harmony = new Harmony("smartpick.patch");
-        harmony.PatchAll();
-        Log.Info("[SmartPick] Harmony patches initialized.");
+        try
+        {
+            harmony.PatchAll();
+            Log.Info("[SmartPick] Harmony patches initialized.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[SmartPick] PatchAll FAILED: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 }

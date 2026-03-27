@@ -1,6 +1,7 @@
 using FirstMod;
 using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
@@ -233,7 +234,7 @@ public static class MerchantCloseBadgePatch
 /// Attach tier badges in the card compendium (card library) after cards are filtered/displayed.
 /// NCardLibraryGrid.FilterCards is called on open and every filter/sort change.
 /// </summary>
-[HarmonyPatch(typeof(NCardLibraryGrid), "FilterCards")]
+[HarmonyPatch(typeof(NCardLibraryGrid), "FilterCards", new[] { typeof(System.Func<CardModel, bool>) })]
 public static class CardLibraryFilterPatch
 {
     [HarmonyPostfix]
